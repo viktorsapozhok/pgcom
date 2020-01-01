@@ -1,0 +1,183 @@
+# pgcom
+
+Communication manager with PostgreSQL database.
+
+## Installation
+
+To install the package, simply use pip.
+
+```
+$ pip install pgcom
+```
+
+#### Setting the commuter
+
+To initialize a new commuter with PostgreSQL database, you need to set the basic connection parameters, which are
+`host`, `port`, `user`, `password`, `db_name`. Any other connection parameter can be passed as a keyword.
+The list of the supported parameters [can be seen here](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
+
+```python
+from db_commuter.commuters import PgCommuter
+
+conn_params = {
+    'host': 'localhost',
+    'port': '5432',
+    'user': 'postgres',
+    'password': 'password',
+    'db_name': 'test_db'
+}
+
+commuter = PgCommuter(**conn_params)
+```
+
+#### Basic usage
+
+Basic operations are provided with `select`, `insert` and `execute` methods.
+
+```python
+data = commuter.select('select * from people where age > %s and salary > %s' % (55, 1000))
+commuter.insert('people', data)
+commuter.execute('insert into people values (%s, %s)', vars=('Yeltsin', 72)) 
+```   
+
+To execute multiple SQL statements with one call, use `executescript`.
+
+```python
+commuter.execute_script(path2script)
+```
+
+#### Setting schema in constructor 
+
+If you operate only on tables within the specific schema, it could make sense to specify the name of database schema 
+when you create the commuter instance.
+
+```python
+from db_commuter.commuters import PgCommuter
+commuter = PgCommuter(host, port, user, password, db_name, schema='model')
+```
+
+#### Insert row and return serial key 
+
+Use `insert_return` method to insert a new row to the table and return the serial key of the newly inserted row.
+
+```python
+cmd = 'INSERT INTO people (name, age) VALUES (%s, %s)'
+values = ('Yeltsin', '72')
+pid = commuter.insert_return(cmd, values=values, return_id='person_id')
+```
+
+In the example above the table `people` should contain a serial key `person_id`. 
+
+#### Insert row
+
+Alternatively, you can use `insert_row` method to insert one new row.
+
+```python
+from datetime import datetime
+
+commuter.insert_row(
+    table_name='people', 
+    name='Yeltsin', 
+    age='72',
+    birth_date=datetime(1931, 2, 1))
+```
+
+It also supports the returning of the serial key. 
+
+```python
+pid = commuter.insert_row(
+    table_name='people', 
+    return_id='person_id', 
+    name='Yeltsin', 
+    age='72')
+```
+
+#### copy_from
+
+In contrast to `insert` method which, in turn, uses pandas `to_sql` machinery, the `copy_from` method 
+efficiently copies data from DataFrame to database employing PostgreSQL `copy_from` command. 
+
+```python
+commuter.copy_from(table_name='people', data=data)
+```
+
+As compared to `insert`, this method works much more effective on the large dataframes.
+You can also set `format_data` parameter as `True` to allow automatically format your 
+DataFrame before calling `copy_from` command.   
+
+```python
+commuter.copy_from(table_name='people', data=df, format_data=True)
+```
+
+#### Delete table
+
+```python
+commuter.delete_table(table_name='people', schema='my_schema')
+```
+
+#### Check if table exists
+
+Return `True` if table exists, otherwise return `False`.
+
+```python
+is_exist = commuter.is_table_exist(table_name='people', schema='my_schema')
+```
+
+#### Column names
+
+Return list of the column names of the given table.
+
+```python
+columns = commuter.get_column_names(table_name='people', schema='my_schema')
+```
+
+#### Amount of connections to database
+
+Return the amount of active connections to the database.
+
+```python
+n_connections = commuter.get_connections_count()
+```
+
+#### Resolve primary conflicts
+
+This method can be used when you want to apply `copy_from` and the DataFrame contains 
+rows conflicting with the primary key (duplicates). To remove conflicted rows 
+from the DataFrame you can use `resolve_primary_conflicts`.
+
+```python
+df = commuter.resolve_primary_conflicts(
+    table_name='payments',
+    data=df,
+    p_key=['payment_date', 'payment_type'],
+    filter_col='payment_date',
+    schema='my_schema')
+```
+
+It selects data from the `table_name` where value in `filter_col` is greater or equal 
+the minimal found value in `filter_col` of the given DataFrame. Rows having primary 
+key which is already presented in selected data are deleted from the DataFrame.
+
+You need to specify parameter `p_key` with the list of column names representing the primary key.
+
+#### Resolve foreign conflicts
+
+This method selects data from `parent_table_name` where value in `filter_parent` column
+is greater or equal the minimal found value in `filter_child` column of the given DataFrame.
+Rows having foreign key which is already presented in selected data are deleted from DataFrame.
+
+```python
+df = commuter.resolve_foreign_conflicts(
+    parent_table_name='people',
+    data=df,
+    f_key='person_id',
+    filter_parent='person_id',
+    filter_child='person_id',
+    schema='my_schema')
+```
+
+Parameter `f_key` should be specified with the list of column names represented the foreign key. 
+
+## License
+
+Package is released under [MIT License](https://github.com/viktorsapozhok/db-commuter/blob/master/LICENSE).
