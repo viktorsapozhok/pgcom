@@ -10,14 +10,15 @@ To install the package, simply use pip.
 $ pip install pgcom
 ```
 
-#### Setting the commuter
+#### Basic usage
 
-To initialize a new commuter with PostgreSQL database, you need to set the basic connection parameters, which are
-`host`, `port`, `user`, `password`, `db_name`. Any other connection parameter can be passed as a keyword.
+To initialize a new commuter with PostgreSQL database, you need to set 
+the basic connection parameters: `host`, `port`, `user`, `password`, and `db_name`. 
+Any other connection parameter can be passed as a keyword. 
 The list of the supported parameters [can be seen here](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
 
 ```python
-from db_commuter.commuters import PgCommuter
+from pgcom import Commuter
 
 conn_params = {
     'host': 'localhost',
@@ -27,17 +28,15 @@ conn_params = {
     'db_name': 'test_db'
 }
 
-commuter = PgCommuter(**conn_params)
+commuter = Commuter(**conn_params)
 ```
-
-#### Basic usage
 
 Basic operations are provided with `select`, `insert` and `execute` methods.
 
 ```python
-data = commuter.select('select * from people where age > %s and salary > %s' % (55, 1000))
-commuter.insert('people', data)
-commuter.execute('insert into people values (%s, %s)', vars=('Yeltsin', 72)) 
+df = commuter.select('select * from people where age > %s and salary > %s' % (55, 1000))
+commuter.insert(table_name='people', data=df)
+commuter.execute(cmd='insert into people values (%s, %s)', vars=('Yeltsin', 72)) 
 ```   
 
 To execute multiple SQL statements with one call, use `executescript`.
@@ -46,19 +45,25 @@ To execute multiple SQL statements with one call, use `executescript`.
 commuter.execute_script(path2script)
 ```
 
-#### Setting schema in constructor 
+#### Schema 
 
-If you operate only on tables within the specific schema, it could make sense to specify the name of database schema 
-when you create the commuter instance.
+You can specify schema when creating a new `commuter` instance.
+ 
+```python
+from pgcom import Commuter
+commuter = Commuter(**conn_params, schema='model')
+```
+
+Alternatively, you can pass it to the method via parameter or directly in command string.
 
 ```python
-from db_commuter.commuters import PgCommuter
-commuter = PgCommuter(host, port, user, password, db_name, schema='model')
+df = commuter.select('select * from model.people')
+commuter.insert(table_name='people', data=df, schema='model')
 ```
 
 #### Insert row and return serial key 
 
-Use `insert_return` method to insert a new row to the table and return the serial key of the newly inserted row.
+Use `insert_return` method to insert a row and return the serial key of the newly inserted row.
 
 ```python
 cmd = 'INSERT INTO people (name, age) VALUES (%s, %s)'
@@ -94,8 +99,8 @@ pid = commuter.insert_row(
 
 #### copy_from
 
-In contrast to `insert` method which, in turn, uses pandas `to_sql` machinery, the `copy_from` method 
-efficiently copies data from DataFrame to database employing PostgreSQL `copy_from` command. 
+In contrast to `insert` method, the `copy_from` method efficiently copies data 
+from DataFrame to database employing PostgreSQL `copy_from` command. 
 
 ```python
 commuter.copy_from(table_name='people', data=data)
@@ -107,12 +112,6 @@ DataFrame before calling `copy_from` command.
 
 ```python
 commuter.copy_from(table_name='people', data=df, format_data=True)
-```
-
-#### Delete table
-
-```python
-commuter.delete_table(table_name='people', schema='my_schema')
 ```
 
 #### Check if table exists
