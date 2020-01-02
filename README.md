@@ -1,6 +1,12 @@
 # pgcom
 
-Communication manager with PostgreSQL database.
+[![Python](https://img.shields.io/badge/python-3.7-blue)](https://www.python.org)
+[![Build Status](https://travis-ci.org/viktorsapozhok/pgcom.svg?branch=master)](https://travis-ci.org/viktorsapozhok/pgcom)
+[![codecov](https://codecov.io/gh/viktorsapozhok/pgcom/branch/master/graph/badge.svg)](https://codecov.io/gh/viktorsapozhok/pgcom)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+Communication manager for PostgreSQL database, provides a collection of wrappers over
+`psycopg2` adapter to simplify the usage of basic SQL operators. 
 
 ## Installation
 
@@ -12,8 +18,8 @@ $ pip install pgcom
 
 #### Basic usage
 
-To initialize a new commuter with PostgreSQL database, you need to set 
-the basic connection parameters: `host`, `port`, `user`, `password`, and `db_name`. 
+To initialize a new commuter, you need to set the basic connection parameters: 
+`host`, `port`, `user`, `password`, and `db_name`. 
 Any other connection parameter can be passed as a keyword. 
 The list of the supported parameters [can be seen here](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
 
@@ -39,26 +45,31 @@ commuter.insert(table_name='people', data=df)
 commuter.execute(cmd='insert into people values (%s, %s)', vars=('Yeltsin', 72)) 
 ```   
 
-To execute multiple SQL statements with one call, use `executescript`.
-
-```python
-commuter.execute_script(path2script)
-```
-
 #### Schema 
 
-You can specify schema when creating a new `commuter` instance.
+You can specify schema when creating a new `Commuter` instance.
  
 ```python
 from pgcom import Commuter
 commuter = Commuter(**conn_params, schema='model')
 ```
 
-Alternatively, you can pass it to the method via parameter or directly in command string.
+Alternatively, you can pass `schema` to the `Commuter` method.
+
+```python
+commuter.insert(table_name='people', data=df, schema='model')
+```
+
+Or directly in command string.
 
 ```python
 df = commuter.select('select * from model.people')
-commuter.insert(table_name='people', data=df, schema='model')
+```
+
+#### Execute multiple SQL statement
+
+```python
+commuter.execute_script(path2script)
 ```
 
 #### Insert row and return serial key 
@@ -97,10 +108,10 @@ pid = commuter.insert_row(
     age='72')
 ```
 
-#### copy_from
+#### Insert data using copy_from
 
 In contrast to `insert` method, the `copy_from` method efficiently copies data 
-from DataFrame to database employing PostgreSQL `copy_from` command. 
+from DataFrame employing PostgreSQL `copy_from` command. 
 
 ```python
 commuter.copy_from(table_name='people', data=data)
@@ -108,29 +119,28 @@ commuter.copy_from(table_name='people', data=data)
 
 As compared to `insert`, this method works much more effective on the large dataframes.
 You can also set `format_data` parameter as `True` to allow automatically format your 
-DataFrame before calling `copy_from` command.   
+DataFrame before calling `copy_from` command. It adjusts columns order before copying
+and converts types.
 
 ```python
 commuter.copy_from(table_name='people', data=df, format_data=True)
 ```
 
-#### Check if table exists
-
-Return `True` if table exists, otherwise return `False`.
+#### Verify if table exists
 
 ```python
 is_exist = commuter.is_table_exist(table_name='people', schema='my_schema')
 ```
 
-#### Column names
+#### Get names of the table columns
 
-Return list of the column names of the given table.
+Return DataFrame with the column names and types.
 
 ```python
-columns = commuter.get_column_names(table_name='people', schema='my_schema')
+columns = commuter.get_columns(table_name='people', schema='my_schema')
 ```
 
-#### Amount of connections to database
+#### Number of connections
 
 Return the amount of active connections to the database.
 
