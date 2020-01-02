@@ -7,12 +7,12 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from pgcom.commuter import Commuter
+from pgcom import Commuter
 
 conn_params = {
     'host': 'localhost',
     'port': '5432',
-    'user': 'postgres',
+    'user': 'pguser',
     'password': 'password',
     'db_name': 'test_db'
 }

@@ -1,0 +1,21 @@
+language: python
+python:
+  - 3.7
+services:
+  - postgresql
+before_install:
+  - python --version
+  - pip install -U pip
+  - pip install -U pytest
+  - pip install -U pytest-cov
+  - pip install -U codecov
+install:
+  - python setup.py develop
+before_script:
+  - psql -c 'CREATE DATABASE test_db;' -U postgres
+  - psql -c 'CREATE SCHEMA model;' -U postgres -d test_db
+  - psql -c 'CREATE ROLE pguser LOGIN SUPERUSER PASSWORD "password";' -U postgres
+script:
+  - pytest --cov=idapi --cov-report=term-missing -vv -s
+after_success:
+  - codecov
