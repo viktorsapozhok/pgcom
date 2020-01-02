@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-
-"""Test commuter methods
-"""
 from datetime import datetime
 
 import numpy as np

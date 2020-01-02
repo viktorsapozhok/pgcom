@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-
-"""Connection to database
-"""
 __all__ = [
     'Connector',
     'Commuter'
