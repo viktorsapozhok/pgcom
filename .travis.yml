@@ -16,6 +16,6 @@ before_script:
   - psql -c "CREATE SCHEMA model;" -U postgres -d test_db
   - psql -c "CREATE ROLE pguser LOGIN SUPERUSER PASSWORD 'password';" -U postgres
 script:
-  - pytest --cov=idapi --cov-report=term-missing -vv -s
+  - pytest --cov=pgcom --cov-report=term-missing -vv -s
 after_success:
   - codecov
