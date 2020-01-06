@@ -3,7 +3,7 @@ python:
   - 3.6
   - 3.7
 addons:
-  postgresql: '9.6'
+  postgresql: '12.1'
 before_install:
   - python --version
   - pip install -U pip
