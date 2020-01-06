@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
 __all__ = ['Listener']
 
+import json
+import logging
 from select import select
 from typing import (
     Any,
     Callable,
     Dict,
-    Optional
+    Optional,
 )
 
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from . import Commuter
+
+logger = logging.getLogger('pgcom')
 
 
 class Listener(Commuter):
@@ -29,8 +33,10 @@ class Listener(Commuter):
     def poll(
             self,
             channel: str,
-            on_notify: Callable[[Dict[str, Any]], Any],
+            on_notify: Optional[Callable[[Dict[str, Any]], None]] = None,
+            on_timeout: Optional[Callable] = None,
             on_close: Optional[Callable] = None,
+            on_error: Optional[Callable[[Exception], None]] = None,
             timeout: int = 5
     ) -> None:
         """Listen to the channel and activate callback on the notification.
@@ -45,15 +51,21 @@ class Listener(Commuter):
                 try:
                     while 1:
                         if select([conn], [], [], timeout) == ([], [], []):
-                            pass
+                            self._callback(on_timeout)
                         else:
                             conn.poll()
 
                             while conn.notifies:
                                 notify = conn.notifies.pop(0)
-                                on_notify(notify.payload)
-                except KeyboardInterrupt:
-                    on_close()
+                                self._callback(
+                                    on_notify,
+                                    json.loads(notify.payload))
+                except (Exception, KeyboardInterrupt, SystemExit) as e:
+                    if (isinstance(e, KeyboardInterrupt) or
+                        isinstance(e, SystemExit)):  # noqa: E129
+                        self._callback(on_close)
+                    else:
+                        self._callback(on_error, e)
 
         self.connector.close_connection()
 
@@ -61,15 +73,12 @@ class Listener(Commuter):
             self,
             notification_name: str,
             channel: str,
-            table_name: str,
             schema: Optional[str] = None
     ) -> None:
         """Create notify function called on trigger.
         """
 
-        schema, table_name = self.get_schema(
-            table_name=table_name,
-            schema=schema)
+        schema, _ = self.get_schema(schema=schema)
 
         cmd = f"""
         CREATE OR REPLACE FUNCTION {schema}.{notification_name}()
@@ -77,7 +86,7 @@ class Listener(Commuter):
             LANGUAGE plpgsql
         AS $function$
         BEGIN
-            PERFORM pg_notify({channel}, row_to_json(NEW)::text);
+            PERFORM pg_notify('{channel}', row_to_json(NEW)::text);
             RETURN new;
         END;
         $function$
@@ -94,10 +103,7 @@ class Listener(Commuter):
         """Create trigger for each table update.
         """
 
-        schema, table_name = self.get_schema(
-            table_name=table_name,
-            schema=schema)
-
+        schema, _ = self.get_schema(schema=schema)
         trigger_name = table_name + '_insert'
 
         cmd = f"""
@@ -108,10 +114,18 @@ class Listener(Commuter):
         self.execute(cmd)
 
         cmd = f"""
-        CREATE TRIGGER {trigger_name}  
+        CREATE TRIGGER {trigger_name}
         AFTER INSERT OR UPDATE
-        ON {schema}.{table_name} 
+        ON {schema}.{table_name}
         FOR EACH ROW EXECUTE FUNCTION {schema}.{notification_name}()
         """
 
         self.execute(cmd)
+
+    @staticmethod
+    def _callback(callback: Optional[Callable] = None, *args: Any) -> None:
+        if callback:
+            try:
+                callback(*args)
+            except Exception as e:
+                logger.error(f'error from callback {callback}: {e}')
