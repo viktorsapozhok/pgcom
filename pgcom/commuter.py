@@ -400,7 +400,8 @@ class Commuter:
             table_name: str,
             data: pd.DataFrame,
             schema: Optional[str] = None,
-            format_data: bool = False
+            format_data: bool = False,
+            where: Optional[str] = None
     ) -> None:
         """Places DataFrame to buffer and apply copy_from method.
 
@@ -412,7 +413,12 @@ class Commuter:
             schema:
                 Name of the schema.
             format_data:
-                Reorder columns and adjust dtypes wrt to table metadata.
+                Reorder columns and adjust dtypes wrt to table metadata
+                from information_schema.
+            where:
+                WHERE clause used to specify a condition while deleting
+                data from the table before applying copy_from,
+                DELETE command is not executed if not specified.
         """
 
         if format_data:
@@ -422,6 +428,9 @@ class Commuter:
 
         with self.connector.make_connection() as conn:
             with conn.cursor() as cur:
+                if where is not None:
+                    cur.execute(f'DELETE FROM {table_name} WHERE {where}')
+
                 # DataFrame to buffer
                 s_buf = StringIO()
                 data.to_csv(s_buf, index=False, header=False)
