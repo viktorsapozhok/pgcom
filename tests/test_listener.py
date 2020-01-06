@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-# from multiprocessing import Process
-# import time
-
-from pgcom import Listener
+from pgcom import Commuter, Listener
 
 conn_params = {
     'host': 'localhost',
@@ -12,6 +9,7 @@ conn_params = {
     'db_name': 'test_db'
 }
 
+commuter = Commuter(**conn_params)
 listener = Listener(**conn_params)
 
 
@@ -31,38 +29,45 @@ def test_poll():
         table_name='people',
         schema='model')
 
-#    p = Process(target=poll)
-#    p.start()
+    listener.poll(
+        channel='test_channel',
+        on_notify=on_notify,
+        on_timeout=on_timeout,
+        on_close=on_close,
+        timeout=1)
 
-    listener.insert_row(
-        table_name='people',
-        id=7,
-        name='Yeltsin',
-        schema='model')
+    df = commuter.select('select * from model.test')
 
-#    time.sleep(3)
-#    p.join(timeout=3)
-
-#    _id = listener.select_one('select id from model.test')
-#    _name = listener.select_one('select name from model.test')
-
-#    assert _id == 7
-#    assert _name == 'Yeltsin'
+    assert df['id'].to_list() == [7, 8]
 
     delete_table('people', schema='model')
     delete_table('test', schema='model')
 
 
-def poll():
-    def on_notify(payload):
-        _listener.insert_row(
-            table_name='test',
-            id=int(payload['id']),
-            name=payload['name'],
-            schema='model')
+def on_notify(payload):
+    commuter.insert_row(
+        table_name='test',
+        id=int(payload['id']),
+        name=payload['name'],
+        schema='model')
 
-    _listener = Listener(**conn_params)
-    _listener.poll(channel='test_channel', on_notify=on_notify)
+    raise KeyboardInterrupt
+
+
+def on_timeout():
+    commuter.insert_row(
+        table_name='people',
+        id=7,
+        name='Yeltsin',
+        schema='model')
+
+
+def on_close():
+    commuter.insert_row(
+        table_name='test',
+        id=8,
+        name='Yeltsin',
+        schema='model')
 
 
 def delete_table(table_name, schema=None):

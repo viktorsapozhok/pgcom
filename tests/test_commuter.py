@@ -162,6 +162,16 @@ def test_copy_from_schema():
     assert data['date'][0].date() == datetime.now().date()
     assert len(data) == 3
 
+    commuter.copy_from(
+        table_name='test_table',
+        data=df,
+        schema='model',
+        format_data=True,
+        where='var_2 in (1,2,3)')
+
+    assert data['date'][0].date() == datetime.now().date()
+    assert len(data) == 3
+
     delete_table(table_name='test_table', schema='model')
 
 
