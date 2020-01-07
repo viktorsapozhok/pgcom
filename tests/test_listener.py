@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import json
+
 from pgcom import Commuter, Listener
 
 conn_params = {
@@ -38,17 +40,23 @@ def test_poll():
 
     df = commuter.select('select * from model.test')
 
-    assert df['id'].to_list() == [7, 8]
+    assert df['id'].to_list() == [2, 3]
 
     delete_table('people', schema='model')
     delete_table('test', schema='model')
 
 
 def on_notify(payload):
+    if len(payload) > 0:
+        payload = json.loads(payload)
+        id, name = int(payload['id']), payload['name']
+    else:
+        id, name = 2, 'Yeltsin'
+
     commuter.insert_row(
         table_name='test',
-        id=int(payload['id']),
-        name=payload['name'],
+        id=id,
+        name=name,
         schema='model')
 
     raise KeyboardInterrupt
@@ -57,7 +65,7 @@ def on_notify(payload):
 def on_timeout():
     commuter.insert_row(
         table_name='people',
-        id=7,
+        id=1,
         name='Yeltsin',
         schema='model')
 
@@ -65,7 +73,7 @@ def on_timeout():
 def on_close():
     commuter.insert_row(
         table_name='test',
-        id=8,
+        id=3,
         name='Yeltsin',
         schema='model')
 
