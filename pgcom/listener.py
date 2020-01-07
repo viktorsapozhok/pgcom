@@ -76,7 +76,7 @@ class Listener(Commuter):
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
             with conn.cursor() as cur:
-                cur.execute(f'LISTEN {channel};')
+                cur.execute(f'LISTEN {channel}')
 
                 try:
                     while 1:
@@ -89,6 +89,8 @@ class Listener(Commuter):
                                 notify = conn.notifies.pop(0)
                                 self._callback(on_notify, notify.payload)
                 except (Exception, KeyboardInterrupt, SystemExit) as e:
+                    cur.execute(f'UNLISTEN {channel}')
+
                     if (isinstance(e, KeyboardInterrupt) or
                         isinstance(e, SystemExit)):  # noqa: E129
                         self._callback(on_close)
