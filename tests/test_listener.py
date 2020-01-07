@@ -19,13 +19,13 @@ def test_poll():
     listener.execute('create table model.people (id integer, name text)')
     listener.execute('create table model.test (id integer, name text)')
 
-    listener.create_notification(
-        notification_name='notify_trigger',
+    listener.create_notify_function(
+        func_name='notify_trigger',
         channel='test_channel',
         schema='model')
 
-    listener.create_insert_trigger(
-        notification_name='notify_trigger',
+    listener.create_trigger(
+        func_name='notify_trigger',
         table_name='people',
         schema='model')
 
