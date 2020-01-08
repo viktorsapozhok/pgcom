@@ -469,18 +469,16 @@ class Commuter:
         """Return True if table exists, otherwise False.
         """
 
-        df = self._select_information(
-            queries.is_table_exist, table_name, schema)
-
+        df = self.select(queries.is_table_exist(table_name, schema))
         return bool(len(df) > 0)
 
     def get_connections_count(self) -> int:
         """Returns the amount of active connections.
         """
 
-        cmd = f'SELECT SUM(numbackends) FROM pg_stat_database'
-
-        return self.select_one(cmd, default=0)
+        return self.select_one(
+            cmd=f'SELECT SUM(numbackends) FROM pg_stat_database',
+            default=0)
 
     @fix_schema
     def resolve_primary_conflicts(
@@ -623,8 +621,7 @@ class Commuter:
             columns for the given table.
         """
 
-        return self._select_information(
-            queries.column_names, table_name, schema)
+        return self.select(queries.column_names(table_name, schema))
 
     def _get_schema(
             self,
@@ -676,8 +673,7 @@ class Commuter:
             columns of the primary key for the given table.
         """
 
-        return self._select_information(
-            queries.primary_key, table_name, schema)
+        return self.select(queries.primary_key(table_name, schema))
 
     def _foreign_key(
             self,
@@ -702,35 +698,8 @@ class Commuter:
             Pandas.DataFrame with columns: `child_column`, `parent_column`.
         """
 
-        return self._select_information(
-            queries.foreign_key,
-            table_name,
-            schema,
-            parent_name,
-            parent_schema)
-
-    def _select_information(
-            self,
-            query: Callable,
-            table_name: str,
-            schema: str,
-            *args: Any
-    ) -> pd.DataFrame:
-        """Wrapper for select queries over postgres information schema.
-
-        Args:
-            query:
-                Name of the function returned SQL query as a string.
-            table_name:
-                Name of the table.
-            schema:
-                Name of the schema.
-
-        Returns:
-            Pandas.DataFrame with the query result.
-        """
-
-        return self.select(query(table_name, schema, *args))
+        return self.select(queries.foreign_key(
+            table_name, schema, parent_name, parent_schema))
 
     def _format_data(
             self,
