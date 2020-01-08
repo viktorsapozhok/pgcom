@@ -12,6 +12,7 @@ from typing import (
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from . import Commuter
+from .commuter import fix_schema
 
 logger = logging.getLogger('pgcom')
 
@@ -103,7 +104,7 @@ class Listener(Commuter):
             self,
             func_name: str,
             channel: str,
-            schema: Optional[str] = None
+            schema: str = 'public'
     ) -> None:
         """Create a function called by trigger.
 
@@ -119,8 +120,6 @@ class Listener(Commuter):
                 If not specified, then the public schema is used.
         """
 
-        schema, _ = self.get_schema(schema=schema)
-
         self.execute(f"""
             CREATE OR REPLACE FUNCTION {schema}.{func_name}()
                 RETURNS trigger
@@ -133,15 +132,16 @@ class Listener(Commuter):
             $function$
             """)
 
+    @fix_schema
     def create_trigger(
             self,
-            func_name: str,
             table_name: str,
+            func_name: str,
+            schema: str = 'public',
+            trigger_name: Optional[str] = None,
             when: str = 'AFTER',
             event: str = 'INSERT',
-            for_each: str = 'STATEMENT',
-            trigger_name: Optional[str] = None,
-            schema: Optional[str] = None
+            for_each: str = 'STATEMENT'
     ) -> None:
         """Create trigger.
 
@@ -150,11 +150,16 @@ class Listener(Commuter):
         events occur.
 
         Args:
+            table_name:
+                The name of the table the trigger is for.
             func_name:
                 A user-supplied function, which is executed when the
                 trigger fires.
-            table_name:
-                The name of the table the trigger is for.
+            schema:
+                If not specified, then the public schema is used.
+            trigger_name:
+                The name to give to the new trigger. If not specified, then
+                the automatically created name will be assigned.
             when:
                 One of `BEFORE`, `AFTER`, `INSTEAD OF`.
                 Determines when function is called.
@@ -165,14 +170,7 @@ class Listener(Commuter):
                 One of `ROW`, `STATEMENT`. This specifies whether the
                 trigger should be fired once for every row affected by the
                 event, or just once per SQL statement.
-            trigger_name:
-                The name to give to the new trigger. If not specified, then
-                the automatically created name will be assigned.
-            schema:
-                If not specified, then the public schema is used.
         """
-
-        schema, _ = self.get_schema(schema=schema)
 
         if trigger_name is None:
             trigger_name = str.lower(

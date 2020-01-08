@@ -4,15 +4,16 @@ __all__ = [
     'Commuter'
 ]
 
-from datetime import datetime
 from collections import defaultdict
 from contextlib import contextmanager
+from datetime import datetime
+from functools import wraps
 from io import StringIO
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterator,
-    List,
     Optional,
     Sequence,
     Tuple,
@@ -24,6 +25,41 @@ import pandas as pd
 import psycopg2
 from sqlalchemy import create_engine, exc
 from sqlalchemy.engine import Engine
+
+from . import queries
+
+
+def fix_schema(func: Callable) -> Callable:
+    """Unifies schema definitions.
+
+    It applies `Commuter._get_schema()` method before calling the wrapped
+    function and propagates the resulting `table_name` and `schema`
+    to the wrapper.
+
+    It allows to call wrappers as it is shown in the following examples.
+    In the last example, the schema `model` should be defined earlier
+    when instance of the `Commuter` object has been created.
+
+    Examples:
+
+        .. code::
+
+            >>> func(table_name='people', schema='model')
+            >>> func(table_name='model.people')
+            >>> func(table_name='people')
+    """
+    @wraps(func)
+    def wrapped(  # type: ignore
+            self,
+            table_name: str,
+            *args: Any,
+            schema: Optional[str] = None,
+            **kwargs: Any
+    ) -> Any:
+        schema, table_name = self._get_schema(table_name, schema=schema)
+        return func(self, table_name, *args, schema=schema, **kwargs)
+
+    return wrapped
 
 
 class Connector:
@@ -150,16 +186,6 @@ class Commuter:
         schema:
             If schema is specified,
             then setting a connection to the schema only.
-
-    Example:
-
-          .. code::
-
-          >>> conn_params = {
-          'host': 'localhost', 'port': '5432',
-          'user': 'postgres', 'password': 'password'}
-          >>> commuter = Commuter(**conn_params)
-
     """
 
     def __init__(
@@ -175,11 +201,11 @@ class Commuter:
             host, port, user, password, db_name, **kwargs)
 
     def select(self, cmd: str) -> pd.DataFrame:
-        """Select data from table.
+        """Reads SQL query into a DataFrame.
 
         Args:
             cmd:
-                SQL query.
+                string SQL query to be executed.
 
         Returns:
             Pandas.DataFrame.
@@ -193,20 +219,17 @@ class Commuter:
     def select_one(
             self,
             cmd: str,
-            default: Optional[Union[int, float, str]] = None
+            default: Optional[Any] = None
     ) -> Any:
-        """Select single value.
+        """Select the first element of returned DataFrame.
 
         Args:
             cmd:
-                SQL query.
+                string SQL query to be executed.
             default:
                 If query result is empty, then return default value.
-
-        Returns:
-
-
         """
+
         df = self.select(cmd)
 
         try:
@@ -219,18 +242,19 @@ class Commuter:
 
         return value
 
+    @fix_schema
     def insert(
             self,
             table_name: str,
             data: pd.DataFrame,
-            schema: Optional[str] = None,
+            schema: str = 'public',
             chunksize: Optional[int] = None
     ) -> None:
         """Insert data from DataFrame to the table.
 
         Args:
             table_name:
-                Name of the database table.
+                Name of the destination table.
             data:
                 Pandas.DataFrame with the data to be inserted.
             schema:
@@ -292,10 +316,11 @@ class Commuter:
 
         self.connector.close_connection()
 
+    @fix_schema
     def insert_row(
             self,
             table_name: str,
-            schema: Optional[str] = None,
+            schema: str = 'public',
             return_id: Optional[str] = None,
             **kwargs: Any
     ) -> Union[int, None]:
@@ -303,21 +328,14 @@ class Commuter:
 
         Args:
             table_name:
-                Name of the table to insert.
+                Name of the destination table.
             schema:
                 Name of the database schema.
             return_id:
                 Name of the returned serial key.
-
-        Example:
-            .. code::
-                >>> commuter.insert_row('people', name='Yeltsin', age=72)
-
         """
 
         sid = None
-        table_name = self._get_table_name(table_name, schema=schema)
-
         keys = ', '.join(kwargs.keys())
         values = ''
 
@@ -334,6 +352,7 @@ class Commuter:
             else:
                 values += str(value)
 
+        table_name = self._table_name(table_name, schema)
         cmd = 'INSERT INTO ' + table_name + ' (' + keys + ') '
         cmd += 'VALUES (' + values + ')'
 
@@ -350,25 +369,16 @@ class Commuter:
             values: Optional[Sequence[Any]] = None,
             return_id: Optional[str] = None
     ) -> int:
-        """Insert a new row to the table and return the serial key of
-        the newly inserted row.
+        """Insert a new row to the table and
+        return the serial key of the newly inserted row.
 
         Args:
             cmd:
-                INSERT INTO command.
+                `INSERT INTO` command.
             values:
                 Inserted values.
             return_id:
                 Name of the returned serial key.
-
-        Example:
-
-          .. code::
-
-          >>> cmd = 'INSERT INTO task_manager (task, project) VALUES (%s, %s)'
-          >>> values = ('my_task', 'my_project')
-          >>> task_id = self.insert_return(cmd, values=values, return_id='task_id')
-
         """
 
         sid = None
@@ -395,11 +405,12 @@ class Commuter:
 
         return sid
 
+    @fix_schema
     def copy_from(
             self,
             table_name: str,
             data: pd.DataFrame,
-            schema: Optional[str] = None,
+            schema: str = 'public',
             format_data: bool = False,
             where: Optional[str] = None
     ) -> None:
@@ -422,9 +433,9 @@ class Commuter:
         """
 
         if format_data:
-            data = self._format_data(data, table_name, schema=schema)
+            data = self._format_data(data, table_name, schema)
 
-        table_name = self._get_table_name(table_name, schema=schema)
+        table_name = self._table_name(table_name, schema)
 
         with self.connector.make_connection() as conn:
             with conn.cursor() as cur:
@@ -449,41 +460,155 @@ class Commuter:
 
         self.connector.close_connection()
 
+    @fix_schema
     def is_table_exist(
             self,
-            table_name: Optional[str],
-            schema: Optional[str] = None
+            table_name: str,
+            schema: str = 'public'
     ) -> bool:
         """Return True if table exists, otherwise False.
         """
 
-        schema, table_name = self.get_schema(
-            table_name=table_name,
-            schema=schema)
+        df = self._select_information(
+            queries.is_table_exist, table_name, schema)
 
-        cmd = f"""
-        SELECT
-            table_name
-        FROM
-            information_schema.tables
-        WHERE
-            table_name = \'{table_name}\' AND
-            table_schema=\'{schema}\'
-        LIMIT 1
+        return bool(len(df) > 0)
+
+    def get_connections_count(self) -> int:
+        """Returns the amount of active connections.
         """
 
-        with self.connector.make_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(cmd)
+        cmd = f'SELECT SUM(numbackends) FROM pg_stat_database'
 
-        self.connector.close_connection()
+        return self.select_one(cmd, default=0)
 
-        return bool(cur.rowcount)
-
-    def get_columns(
+    @fix_schema
+    def resolve_primary_conflicts(
             self,
-            table_name: Optional[str],
-            schema: Optional[str] = None
+            table_name: str,
+            data: pd.DataFrame,
+            where: str,
+            schema: str = 'public'
+    ) -> pd.DataFrame:
+        """Resolve primary key conflicts in DataFrame.
+
+        This method selects data from `table_name` and removes all
+        rows from the given DataFrame, which violate primary key
+        constraint in the selected data.
+
+        Parameter `where` is used to reduce the amount of querying data.
+        It specifies the `WHERE` clause in the `SELECT` query.
+
+        Args:
+            table_name:
+                Name of the table.
+            data:
+                DataFrame with primary key conflicts.
+            where:
+                User defined `WHERE` clause used when selecting
+                data from `table_name`.
+            schema:
+                Name of the schema.
+
+        Returns:
+            pd.DataFrame without primary key conflicts.
+        """
+
+        df = data.copy()
+        table_name = self._table_name(table_name, schema)
+
+        cmd = f"SELECT * FROM {table_name} WHERE {where}"
+        table_data = self.select(cmd)
+
+        # get primary key columns
+        p_key = self._primary_key(table_name, schema)
+        p_key = p_key['column_name'].to_list()
+
+        if len(p_key) > 0:
+            if not table_data.empty:
+                df.set_index(p_key, inplace=True)
+                table_data.set_index(p_key, inplace=True)
+
+                # remove rows which are in table data index
+                df = df[~df.index.isin(table_data.index)]
+                # reset index and sort columns
+                df = df.reset_index(level=p_key)
+                df = df[data.columns]
+
+        return df
+
+    @fix_schema
+    def resolve_foreign_conflicts(
+            self,
+            table_name: str,
+            parent_name: str,
+            data: pd.DataFrame,
+            where: str,
+            schema: str = 'public',
+            parent_schema: Optional[str] = None
+    ) -> pd.DataFrame:
+        """Resolve foreign key conflicts in DataFrame.
+
+        This method selects data from `parent_table` and removes all
+        rows from the given DataFrame, which violate foreign key
+        constraint in the selected data.
+
+        Parameter `where` is used to reduce the amount of querying data.
+        It specifies the `WHERE` clause in the `SELECT` query.
+
+        Args:
+            table_name:
+                Name of the child table, where data needs to be inserted.
+            parent_name:
+                Name of the parent table.
+            data:
+                DataFrame with foreign key conflicts.
+            where:
+                User defined `WHERE` clause used when selecting
+                data from `table_name`.
+            schema:
+                Name of the child table schema.
+            parent_schema:
+                Name of the parent table schema.
+
+        Returns:
+            pd.DataFrame without foreign key conflicts.
+        """
+
+        df = data.copy()
+
+        parent_schema, parent_name = self._get_schema(
+            table_name=parent_name,
+            schema=parent_schema)
+
+        foreign_key = self._foreign_key(
+            table_name, parent_name, schema, parent_schema)
+
+        parent_table = self._table_name(parent_name, parent_schema)
+
+        cmd = f"SELECT * FROM {parent_table} WHERE {where}"
+        parent_data = self.select(cmd)
+
+        if not parent_data.empty:
+            df.set_index(
+                foreign_key['child_column'].to_list(), inplace=True)
+            parent_data.set_index(
+                foreign_key['parent_column'].to_list(), inplace=True)
+
+            # remove rows which are not in parent index
+            df = df[df.index.isin(parent_data.index)]
+            # reset index and sort columns
+            df = df.reset_index(level=foreign_key['child_column'].to_list())
+            df = df[data.columns]
+        else:
+            df = pd.DataFrame()
+
+        return df
+
+    def _table_columns(
+            self,
+            table_name: str,
+            schema: str
     ) -> pd.DataFrame:
         """Return columns attributes of the given table.
 
@@ -494,246 +619,153 @@ class Commuter:
                 Name of the schema.
 
         Returns:
-            Pandas.DataFrame having following columns:
-                column_name, data_type.
+            Pandas.DataFrame with the names and data types of all
+            columns for the given table.
         """
 
-        schema, table_name = self.get_schema(
-            table_name=table_name,
-            schema=schema)
+        return self._select_information(
+            queries.column_names, table_name, schema)
 
-        cmd = f"""
-        SELECT
-            column_name, data_type
-        FROM
-            information_schema.columns
-        WHERE
-            table_schema = \'{schema}\' AND
-            table_name = \'{table_name}\'
-        ORDER BY
-            ordinal_position;
-        """
-
-        columns = self.select(cmd)
-
-        return columns
-
-    def get_connections_count(self) -> int:
-        """Returns the amount of active connections.
-        """
-
-        cmd = f'SELECT SUM(numbackends) FROM pg_stat_database'
-
-        return self.select_one(cmd, default=0)
-
-    def resolve_primary_conflicts(
+    def _get_schema(
             self,
             table_name: str,
-            data: pd.DataFrame,
-            p_key: List[str],
-            filter_col: str,
             schema: Optional[str] = None
-    ) -> pd.DataFrame:
-        """Resolve primary key conflicts in DataFrame.
-
-        This method selects data from `table_name` where
-        value in `filter_col` is greater or equal the minimal
-        found value in `filter_col` of the given DataFrame.
-
-        Rows having primary key which is already presented in
-        selected data are deleted from the DataFrame.
-
-        Args:
-            table_name:
-                Name of the table.
-            data:
-                DataFrame from where rows having existing primary
-                key need to be deleted.
-            p_key:
-                Primary key columns.
-            filter_col:
-                Column used when querying the data from table.
-            schema:
-                Name of the schema.
-
-        Returns:
-            pd.DataFrame
-        """
-
-        table_name = self._get_table_name(table_name, schema=schema)
-
-        df = data.copy()
-
-        min_val = df[filter_col].min()
-        cmd = f'SELECT * FROM {table_name} WHERE {filter_col} >= '
-
-        if isinstance(min_val, pd.Timestamp):
-            cmd += f'\'{min_val}\''
-        else:
-            cmd += f'{min_val}'
-
-        # select from table
-        table_data = self.select(cmd)
-
-        # remove conflicting rows
-        if not table_data.empty:
-            df.set_index(p_key, inplace=True)
-            table_data.set_index(p_key, inplace=True)
-
-            # remove rows which are in table data index
-            df = df[~df.index.isin(table_data.index)]
-            # reset index and sort columns
-            df = df.reset_index(level=p_key)
-            df = df[data.columns]
-
-        return df
-
-    def resolve_foreign_conflicts(
-            self,
-            parent_table_name: str,
-            data: pd.DataFrame,
-            f_key: List[str],
-            filter_parent: str,
-            filter_child: str,
-            schema: Optional[str] = None
-    ) -> pd.DataFrame:
-        """Resolve foreign key conflicts in DataFrame.
-
-        This method selects data from `parent_table_name`
-        where value in `filter_parent` column is greater or equal
-        the minimal found value in `filter_child` column
-        of the given DataFrame.
-
-        Rows having foreign key which is already presented in
-        selected data are deleted from DataFrame.
-
-        Args:
-            parent_table_name:
-                Name of the parent table.
-            data:
-                DataFrame from where rows having existing
-                foreign key need to be deleted.
-            f_key:
-                Foreign key columns.
-            filter_parent:
-                Column used when querying the data from parent table.
-            filter_child:
-                Column used when searching for minimal value in child.
-            schema:
-                Name of the schema.
-
-        Returns:
-            pd.DataFrame
-        """
-
-        parent_table_name = self._get_table_name(
-            table_name=parent_table_name,
-            schema=schema)
-
-        df = data.copy()
-
-        min_val = df[filter_child].min()
-        cmd = f'SELECT * FROM {parent_table_name} WHERE {filter_parent} >= '
-
-        if isinstance(min_val, pd.Timestamp):
-            cmd += f'\'{min_val}\''
-        else:
-            cmd += f'{min_val}'
-
-        table_data = self.select(cmd)
-
-        # remove conflicting rows
-        if not table_data.empty:
-            df.set_index(f_key, inplace=True)
-            table_data.set_index(f_key, inplace=True)
-
-            # remove rows which are not in parent index
-            df = df[df.index.isin(table_data.index)]
-            # reset index and sort columns
-            df = df.reset_index(level=f_key)
-            df = df[data.columns]
-        else:
-            # if parent is empty then cannot insert data
-            df = pd.DataFrame()
-
-        return df
-
-    def get_schema(
-            self,
-            table_name: Optional[str] = None,
-            schema: Optional[str] = None
-    ) -> Tuple[str, Optional[str]]:
-        """Return schema name and table name.
+    ) -> Tuple[str, str]:
+        """Return schema and table names.
 
         Examples:
 
             .. code::
 
-                >>> self.get_schema(table_name='my_schema.my_table')
-                ('my_schema', 'my_table')
-                >>> self.get_schema()
-                ('public', None)
-                >>> commuter.get_schema(schema='my_schema')
-                ('my_schema', None)
-                >>> commuter.get_schema(
-                    table_name='my_schema.my_table', schema='schema_2')
-                ('my_schema', 'my_table')
-
+            >>> self._get_schema(table_name='my_schema.my_table')
+            ('my_schema', 'my_table')
+            >>> self._get_schema(table_name='my_table')
+            ('public', 'my_table')
         """
 
-        _schema = self.connector.schema
-        _table_name = table_name
+        names = str.split(table_name, '.')
 
-        if table_name is not None:
-            names = str.split(table_name, '.')
-
-            if len(names) == 2:
-                _schema = names[0]
-                _table_name = names[1]
-
-                return _schema, _table_name
+        if len(names) == 2:
+            return names[0], names[1]
 
         if schema is not None:
             _schema = schema
         else:
-            _schema = 'public'
+            if self.connector.schema is not None:
+                _schema = self.connector.schema
+            else:
+                _schema = 'public'
 
-        return _schema, _table_name
+        return _schema, table_name
+
+    def _primary_key(
+            self,
+            table_name: str,
+            schema: str
+    ) -> pd.DataFrame:
+        """Return names of all columns of the primary key.
+
+        Args:
+            table_name:
+                Name of the table.
+            schema:
+                Name of the schema.
+
+        Returns:
+            Pandas.DataFrame with the names and data types of all
+            columns of the primary key for the given table.
+        """
+
+        return self._select_information(
+            queries.primary_key, table_name, schema)
+
+    def _foreign_key(
+            self,
+            table_name: str,
+            parent_name: str,
+            schema: str,
+            parent_schema: str
+    ) -> pd.DataFrame:
+        """Return names of all columns of the foreign key.
+
+        Args:
+            table_name:
+                Name of the child table.
+            parent_name:
+                Name of the parent table.
+            schema:
+                Name of the child schema.
+            parent_schema:
+                Name of the parent schema.
+
+        Returns:
+            Pandas.DataFrame with columns: `child_column`, `parent_column`.
+        """
+
+        return self._select_information(
+            queries.foreign_key,
+            table_name,
+            schema,
+            parent_name,
+            parent_schema)
+
+    def _select_information(
+            self,
+            query: Callable,
+            table_name: str,
+            schema: str,
+            *args: Any
+    ) -> pd.DataFrame:
+        """Wrapper for select queries over postgres information schema.
+
+        Args:
+            query:
+                Name of the function returned SQL query as a string.
+            table_name:
+                Name of the table.
+            schema:
+                Name of the schema.
+
+        Returns:
+            Pandas.DataFrame with the query result.
+        """
+
+        return self.select(query(table_name, schema, *args))
 
     def _format_data(
             self,
-            df: pd.DataFrame,
+            data: pd.DataFrame,
             table_name: str,
-            schema: Optional[str] = None
+            schema: str
     ) -> pd.DataFrame:
         """Formatting DataFrame before applying copy_from.
         """
 
         # select column attributes
-        table_columns = self.get_columns(table_name, schema=schema)
+        table_columns = self._table_columns(table_name, schema)
 
         # adjust dtypes of DataFrame columns
         for row in table_columns.itertuples():
             column = row.column_name
 
             if row.data_type in ['smallint', 'integer', 'bigint']:
-                if df[column].dtype == np.float:
-                    df[column] = df[column].astype(int)
+                if data[column].dtype == np.float:
+                    data[column] = data[column].astype(int)
 
         # set columns order according to ordinal position
-        df = df[table_columns['column_name'].to_list()]
+        data = data[table_columns['column_name'].to_list()]
 
-        return df
+        return data
 
     @staticmethod
-    def _get_table_name(
+    def _table_name(
             table_name: str,
-            schema: Optional[str] = None
+            schema: str
     ) -> str:
-        """Return name of the table.
+        """Join schema and table_name to single string.
         """
 
-        if (schema is None) or (schema == 'public'):
+        if schema == 'public':
             return table_name
-
-        return schema + '.' + table_name
+        else:
+            return schema + '.' + table_name

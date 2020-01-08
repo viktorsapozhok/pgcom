@@ -1,18 +1,10 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 
-import numpy as np
 import pandas as pd
 
 from pgcom import Commuter
-
-conn_params = {
-    'host': 'localhost',
-    'port': '5432',
-    'user': 'pguser',
-    'password': 'password',
-    'db_name': 'test_db'
-}
+from .conftest import conn_params
 
 commuter = Commuter(**conn_params)
 
@@ -23,7 +15,7 @@ def test_connection():
 
 
 def test_connection_keywords():
-    _commuter = Commuter(**conn_params, sslmode='require', schema='public')
+    _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
 
     with _commuter.connector.make_connection() as conn:
         assert conn is not None
@@ -35,7 +27,7 @@ def test_engine():
 
 
 def test_engine_keywords():
-    _commuter = Commuter(**conn_params, sslmode='require', schema='public')
+    _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
 
     with _commuter.connector.engine.connect() as conn:
         assert conn.connection.is_valid
@@ -120,6 +112,18 @@ def test_select_one():
     value = commuter.select_one(cmd=cmd, default=-1)
 
     assert value == -1
+
+    delete_table(table_name='test_table')
+
+
+def test_table_exist():
+    delete_table(table_name='test_table')
+
+    assert not commuter.is_table_exist('test_table')
+
+    commuter.execute(create_test_table())
+
+    assert commuter.is_table_exist('test_table')
 
     delete_table(table_name='test_table')
 
@@ -226,8 +230,14 @@ def test_resolve_primary_conflicts():
     df = commuter.resolve_primary_conflicts(
         table_name='test_table',
         data=data,
-        p_key=['var_1', 'var_2'],
-        filter_col='var_1')
+        where='var_2 in (1,2,3)')
+
+    assert df.empty
+
+    df = commuter.resolve_primary_conflicts(
+        table_name='test_table',
+        data=data,
+        where=f"var_1 > '{datetime(2020,1,1)}'")
 
     assert df.empty
 
@@ -237,8 +247,7 @@ def test_resolve_primary_conflicts():
     df = commuter.resolve_primary_conflicts(
         table_name='test_table',
         data=_data,
-        p_key=['var_1', 'var_2'],
-        filter_col='var_1')
+        where=f"var_1 > '{datetime(2020,1,1)}'")
 
     assert len(df) == 2
 
@@ -247,45 +256,28 @@ def test_resolve_primary_conflicts():
 
 def test_resolve_foreign_conflicts():
     delete_table(table_name='test_table')
+    delete_table(table_name='child_table')
 
-    data = create_test_data()
+    parent_data = create_test_data()
+    child_data = pd.DataFrame({
+        'var_1': [1, 1, 3, 4, 5],
+        'var_2': [1] * 5,
+        'var_3': ['x'] * 5})
+
     commuter.execute(create_test_table())
-    commuter.copy_from('test_table', data)
-
-    _data = data.copy()
-    _data['var_2'] = [1, 2, 4]
+    commuter.execute(create_child_table())
+    commuter.copy_from('test_table', parent_data)
 
     df = commuter.resolve_foreign_conflicts(
-        parent_table_name='test_table',
-        data=_data,
-        f_key=['var_2'],
-        filter_parent='var_1',
-        filter_child='var_1')
+        table_name='child_table',
+        parent_name='test_table',
+        data=child_data,
+        where='var_2=1')
 
     assert len(df) == 2
 
     delete_table(table_name='test_table')
-
-
-def test_column_names():
-    delete_table(table_name='test_table')
-
-    commuter.execute(create_test_table())
-    columns = commuter.get_columns('test_table')
-
-    assert columns['column_name'].to_list() == \
-        ['var_1', 'var_2', 'var_3', 'var_4']
-
-    delete_table(table_name='test_table')
-
-
-def test_schema_parser():
-    assert commuter.get_schema(table_name='schema.table') == \
-        ('schema', 'table')
-    assert commuter.get_schema() == ('public', None)
-    assert commuter.get_schema(schema='schema') == ('schema', None)
-    assert commuter.get_schema(table_name='my_table') == \
-        ('public', 'my_table')
+    delete_table(table_name='child_table')
 
 
 def test_insert_row():
@@ -345,29 +337,25 @@ def test_insert_row_return():
 
 
 def create_test_table():
-    cmd = f"""
+    return f"""
     CREATE TABLE IF NOT EXISTS test_table (
         var_1 timestamp,
-        var_2 integer NOT NULL,
+        var_2 integer NOT NULL PRIMARY KEY,
         var_3 text,
         var_4 real);
     """
 
-    return cmd
-
 
 def create_test_data():
-    df = pd.DataFrame({
+    return pd.DataFrame({
         'var_1': pd.date_range(datetime.now(), periods=3),
         'var_2': [1, 2, 3],
         'var_3': ['x', 'xx', 'xxx'],
-        'var_4': np.random.rand(3)})
-
-    return df
+        'var_4': [1.1, 2.2, 3.3]})
 
 
 def create_test_table_schema():
-    cmd = f"""
+    return f"""
     CREATE TABLE IF NOT EXISTS model.test_table (
         var_1 timestamp,
         var_2 integer NOT NULL,
@@ -375,11 +363,9 @@ def create_test_table_schema():
         var_4 real);
     """
 
-    return cmd
-
 
 def create_test_table_serial():
-    cmd = f"""
+    return f"""
     CREATE TABLE IF NOT EXISTS model.test_table (
         id SERIAL PRIMARY KEY,
         var_1 timestamp,
@@ -388,12 +374,22 @@ def create_test_table_serial():
         var_4 real);
     """
 
-    return cmd
+
+def create_child_table():
+    return f"""
+    CREATE TABLE IF NOT EXISTS child_table (
+        var_1 integer,
+        var_2 integer,
+        var_3 integer,
+        FOREIGN KEY (var_1) REFERENCES test_table(var_2));
+    """
 
 
 def delete_table(table_name, schema=None):
     if commuter.is_table_exist(table_name, schema=schema):
         if schema is None:
-            commuter.execute('drop table ' + table_name)
+            cmd = 'drop table ' + table_name + ' CASCADE'
         else:
-            commuter.execute('drop table ' + schema + '.' + table_name)
+            cmd = 'drop table ' + schema + '.' + table_name + ' CASCADE'
+
+        commuter.execute(cmd)

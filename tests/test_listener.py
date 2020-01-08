@@ -2,14 +2,7 @@
 import json
 
 from pgcom import Commuter, Listener
-
-conn_params = {
-    'host': 'localhost',
-    'port': '5432',
-    'user': 'pguser',
-    'password': 'password',
-    'db_name': 'test_db'
-}
+from .conftest import conn_params
 
 commuter = Commuter(**conn_params)
 listener = Listener(**conn_params)
@@ -27,9 +20,8 @@ def test_poll():
         schema='model')
 
     listener.create_trigger(
-        func_name='notify_trigger',
-        table_name='people',
-        schema='model')
+        table_name='model.people',
+        func_name='notify_trigger')
 
     listener.poll(
         channel='test_channel',
@@ -49,14 +41,14 @@ def test_poll():
 def on_notify(payload):
     if len(payload) > 0:
         payload = json.loads(payload)
-        id, name = int(payload['id']), payload['name']
+        _id, _name = int(payload['id']), payload['name']
     else:
-        id, name = 2, 'Yeltsin'
+        _id, _name = 2, 'Yeltsin'
 
     commuter.insert_row(
         table_name='test',
-        id=id,
-        name=name,
+        id=_id,
+        name=_name,
         schema='model')
 
     raise KeyboardInterrupt
@@ -79,8 +71,8 @@ def on_close():
 
 
 def delete_table(table_name, schema=None):
-    if listener.is_table_exist(table_name, schema=schema):
+    if commuter.is_table_exist(table_name, schema=schema):
         if schema is None:
-            listener.execute('drop table ' + table_name)
+            commuter.execute('drop table ' + table_name)
         else:
-            listener.execute('drop table ' + schema + '.' + table_name)
+            commuter.execute('drop table ' + schema + '.' + table_name)
