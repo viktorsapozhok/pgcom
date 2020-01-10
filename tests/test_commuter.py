@@ -146,7 +146,7 @@ def test_copy_from():
 def test_copy_from_schema():
     delete_table(table_name='test_table', schema='model')
 
-    commuter.execute(create_test_table_schema())
+    commuter.execute(create_test_table(schema='model'))
 
     df = create_test_data()
     df['new_var_1'] = 1
@@ -221,14 +221,14 @@ def test_schema():
 
 
 def test_resolve_primary_conflicts():
-    delete_table(table_name='test_table')
+    delete_table(table_name='test_table', schema='model')
 
     data = create_test_data()
-    commuter.execute(create_test_table())
-    commuter.copy_from(table_name='test_table', data=data)
+    commuter.execute(create_test_table(schema='model'))
+    commuter.copy_from(table_name='test_table', data=data, schema='model')
 
     df = commuter.resolve_primary_conflicts(
-        table_name='test_table',
+        table_name='model.test_table',
         data=data,
         where='var_2 in (1,2,3)')
 
@@ -237,6 +237,7 @@ def test_resolve_primary_conflicts():
     df = commuter.resolve_primary_conflicts(
         table_name='test_table',
         data=data,
+        schema='model',
         where=f"var_1 > '{datetime(2020,1,1)}'")
 
     assert df.empty
@@ -247,15 +248,16 @@ def test_resolve_primary_conflicts():
     df = commuter.resolve_primary_conflicts(
         table_name='test_table',
         data=_data,
+        schema='model',
         where=f"var_1 > '{datetime(2020,1,1)}'")
 
     assert len(df) == 2
 
-    delete_table(table_name='test_table')
+    delete_table(table_name='test_table', schema='model')
 
 
 def test_resolve_foreign_conflicts():
-    delete_table(table_name='test_table')
+    delete_table(table_name='test_table', schema='model')
     delete_table(table_name='child_table')
 
     parent_data = create_test_data()
@@ -264,26 +266,28 @@ def test_resolve_foreign_conflicts():
         'var_2': [1] * 5,
         'var_3': ['x'] * 5})
 
-    commuter.execute(create_test_table())
-    commuter.execute(create_child_table())
-    commuter.copy_from('test_table', parent_data)
+    commuter.execute(create_test_table(schema='model'))
+    commuter.execute(create_child_table(
+        child_name='child_table',
+        parent_name='model.test_table'))
+    commuter.copy_from('test_table', parent_data, schema='model')
 
     df = commuter.resolve_foreign_conflicts(
         table_name='child_table',
-        parent_name='test_table',
+        parent_name='model.test_table',
         data=child_data,
         where='var_2=1')
 
     assert len(df) == 2
 
-    delete_table(table_name='test_table')
+    delete_table(table_name='test_table', schema='model')
     delete_table(table_name='child_table')
 
 
 def test_insert_row():
     delete_table(table_name='test_table', schema='model')
 
-    commuter.execute(create_test_table_schema())
+    commuter.execute(create_test_table(schema='model'))
 
     commuter.insert_row(
         table_name='test_table',
@@ -336,9 +340,14 @@ def test_insert_row_return():
     delete_table(table_name='test_table', schema='model')
 
 
-def create_test_table():
+def create_test_table(schema=None):
+    if schema is not None:
+        table_name = schema + '.test_table'
+    else:
+        table_name = 'test_table'
+
     return f"""
-    CREATE TABLE IF NOT EXISTS test_table (
+    CREATE TABLE IF NOT EXISTS {table_name} (
         var_1 timestamp,
         var_2 integer NOT NULL PRIMARY KEY,
         var_3 text,
@@ -354,16 +363,6 @@ def create_test_data():
         'var_4': [1.1, 2.2, 3.3]})
 
 
-def create_test_table_schema():
-    return f"""
-    CREATE TABLE IF NOT EXISTS model.test_table (
-        var_1 timestamp,
-        var_2 integer NOT NULL,
-        var_3 text,
-        var_4 real);
-    """
-
-
 def create_test_table_serial():
     return f"""
     CREATE TABLE IF NOT EXISTS model.test_table (
@@ -375,13 +374,13 @@ def create_test_table_serial():
     """
 
 
-def create_child_table():
+def create_child_table(child_name, parent_name):
     return f"""
-    CREATE TABLE IF NOT EXISTS child_table (
+    CREATE TABLE IF NOT EXISTS {child_name} (
         var_1 integer,
         var_2 integer,
         var_3 integer,
-        FOREIGN KEY (var_1) REFERENCES test_table(var_2));
+        FOREIGN KEY (var_1) REFERENCES {parent_name}(var_2));
     """
 
 

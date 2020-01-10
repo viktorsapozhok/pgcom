@@ -48,6 +48,7 @@ def fix_schema(func: Callable) -> Callable:
             >>> func(table_name='model.people')
             >>> func(table_name='people')
     """
+
     @wraps(func)
     def wrapped(  # type: ignore
             self,
@@ -56,7 +57,10 @@ def fix_schema(func: Callable) -> Callable:
             schema: Optional[str] = None,
             **kwargs: Any
     ) -> Any:
-        schema, table_name = self._get_schema(table_name, schema=schema)
+        schema, table_name = self._get_schema(
+            table_name=table_name,
+            schema=schema)
+
         return func(self, table_name, *args, schema=schema, **kwargs)
 
     return wrapped
@@ -114,6 +118,14 @@ class Connector:
 
     def __del__(self) -> None:
         self.close_connection()
+
+    def __repr__(self) -> str:
+        schema = 'public' if self.schema is None else self.schema
+        return f'(' \
+               f'host={self.host}, ' \
+               f'user={self.user}, ' \
+               f'db_name={self.db_name}, ' \
+               f'schema={schema})'
 
     @contextmanager
     def make_connection(self) -> Iterator[psycopg2.connect]:
@@ -200,6 +212,9 @@ class Commuter:
         self.connector = Connector(
             host, port, user, password, db_name, **kwargs)
 
+    def __repr__(self) -> str:
+        return repr(self.connector)
+
     def select(self, cmd: str) -> pd.DataFrame:
         """Reads SQL query into a DataFrame.
 
@@ -250,7 +265,7 @@ class Commuter:
             schema: str = 'public',
             chunksize: Optional[int] = None
     ) -> None:
-        """Insert data from DataFrame to the table.
+        """Write records stored in a DataFrame to database.
 
         Args:
             table_name:
@@ -281,6 +296,9 @@ class Commuter:
             vars: Optional[Sequence[Any]] = None,
             commit: bool = True
     ) -> None:
+        """Execute a database operation (query or command).
+        """
+
         with self.connector.make_connection() as conn:
             try:
                 with conn.cursor() as cur:
@@ -512,17 +530,18 @@ class Commuter:
             pd.DataFrame without primary key conflicts.
         """
 
-        df = data.copy()
-        table_name = self._table_name(table_name, schema)
-
-        cmd = f"SELECT * FROM {table_name} WHERE {where}"
-        table_data = self.select(cmd)
-
-        # get primary key columns
+        # extract names of the primary key columns
         p_key = self._primary_key(table_name, schema)
         p_key = p_key['column_name'].to_list()
 
+        df = data.copy()
+
         if len(p_key) > 0:
+            table_name = self._table_name(table_name, schema)
+
+            cmd = f"SELECT * FROM {table_name} WHERE {where}"
+            table_data = self.select(cmd)
+
             if not table_data.empty:
                 df.set_index(p_key, inplace=True)
                 table_data.set_index(p_key, inplace=True)
@@ -582,24 +601,25 @@ class Commuter:
         foreign_key = self._foreign_key(
             table_name, parent_name, schema, parent_schema)
 
-        parent_table = self._table_name(parent_name, parent_schema)
+        if len(foreign_key) > 0:
+            parent_table = self._table_name(parent_name, parent_schema)
 
-        cmd = f"SELECT * FROM {parent_table} WHERE {where}"
-        parent_data = self.select(cmd)
+            cmd = f"SELECT * FROM {parent_table} WHERE {where}"
+            parent_data = self.select(cmd)
 
-        if not parent_data.empty:
-            df.set_index(
-                foreign_key['child_column'].to_list(), inplace=True)
-            parent_data.set_index(
-                foreign_key['parent_column'].to_list(), inplace=True)
+            if not parent_data.empty:
+                df.set_index(
+                    foreign_key['child_column'].to_list(), inplace=True)
+                parent_data.set_index(
+                    foreign_key['parent_column'].to_list(), inplace=True)
 
-            # remove rows which are not in parent index
-            df = df[df.index.isin(parent_data.index)]
-            # reset index and sort columns
-            df = df.reset_index(level=foreign_key['child_column'].to_list())
-            df = df[data.columns]
-        else:
-            df = pd.DataFrame()
+                # remove rows which are not in parent index
+                df = df[df.index.isin(parent_data.index)]
+                # reset index and sort columns
+                df = df.reset_index(level=foreign_key['child_column'].to_list())
+                df = df[data.columns]
+            else:
+                df = pd.DataFrame()
 
         return df
 
