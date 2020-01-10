@@ -28,7 +28,7 @@ setup(
     long_description_content_type='text/markdown',
     author='Alex Piskun',
     author_email='piskun.aleksey@gmail.com',
-    url='https://github.com/viktorsapozhok/db-commuter',
+    url='https://github.com/viktorsapozhok/pgcom',
     packages=['pgcom'],
     include_package_data=True,
     zip_safe=False,
