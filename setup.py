@@ -38,7 +38,12 @@ setup(
         'psycopg2-binary>=2.7.7'
     ],
     extras_require={
-        'test': ['pytest', 'tox']
+        'test': ['pytest', 'tox'],
+        'docs': [
+            'sphinx',
+            'sphinx_rtd_theme',
+            'sphinx-autodoc-typehints'
+        ]
     },
     python_requires='>=3.6',
 )
