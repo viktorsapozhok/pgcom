@@ -19,7 +19,9 @@ Psycopg adapter to simplify the usage of basic SQL operators.
 .. toctree::
    :maxdepth: 2
 
+   installation
    overview
+   reference/index
    changelog
 
 License is MIT.

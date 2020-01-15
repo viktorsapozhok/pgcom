@@ -160,7 +160,7 @@ Using `insert_return`, you need to specify SQL string.
 ```python
 num = commuter.insert_return(
     cmd='INSERT INTO people (name, age) VALUES (%s, %s)', 
-    vars=('Yeltsin', 76),
+    values=('Yeltsin', 76),
     return_id='num')
 
 print(f'returned value: {num}')
