@@ -66,8 +66,8 @@ To write records stored in a DataFrame to database, you can use
 
     commuter.insert(table_name='people', data=df)
 
-Schema
-------
+Schema support
+--------------
 
 To specify schema, you have two different options. You can either specify the
 ``schema`` attribute in the constructor, or just pass it directly to the method.
@@ -218,7 +218,7 @@ with this constraint, the data cannot be added to the table
 with the :func:`~pgcom.commuter.Commuter.copy_from`. It is still possible to
 insert the data with the :func:`~pgcom.commuter.Commuter.execute` method,
 using for example ``INSERT ON CONFLICT`` statement
-([see here for details](https://www.postgresqltutorial.com/postgresql-upsert/)).
+(`see here for details <https://www.postgresqltutorial.com/postgresql-upsert/>`_).
 
 Let's create a table with the primary key and insert one row.
 
