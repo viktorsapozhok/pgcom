@@ -34,11 +34,9 @@ Execute a database operation (query or command):
 .. code-block:: python
 
     # create table
-    commuter.execute(f"""
-        CREATE TABLE IF NOT EXISTS people (
-            name text,
-            age integer)
-        """)
+    commuter.execute(f"""CREATE TABLE IF NOT EXISTS people (
+        name text,
+        age integer)""")
 
     # insert to table
     commuter.execute(
@@ -128,12 +126,10 @@ values using ``kwargs``:
 
 .. code-block:: bash
 
-    >>> cmd = f"""
-    ... CREATE TABLE people (
+    >>> commuter.execute(f"""CREATE TABLE people (
     ...     num SERIAL PRIMARY KEY,
     ...     name text,
-    ...     age integer)"""
-    >>> commuter.execute(cmd)
+    ...     age integer)""")
     >>>
     >>> num = commuter.insert_row(
     ...     table_name='people',
@@ -155,3 +151,102 @@ Using :func:`~pgcom.commuter.Commuter.insert_return`, you need to specify SQL st
     >>>
     >>> print(num)
     2
+
+Insert with COPY FROM
+---------------------
+
+PostgreSQL ``COPY FROM`` command copies data from a file-system file to a table
+(appending the data to whatever is in the table already).
+
+Currently no adaptation is provided between Python and PostgreSQL types on COPY:
+the file can be any Python file-like object but its format must be in the format
+accepted by PostgreSQL COPY command (data format, escaped characters, etc).
+
+The :func:`~pgcom.commuter.Commuter.copy_from` method adapts an interface to
+efficient PostgreSQL ``COPY FROM`` command provided by Psycopg ``cursor`` objects
+to support writing data stored in a DataFrame.
+
+To see a difference, let's try to insert data from the DataFrame with 1M rows
+and two columns using just a basic :func:`~pgcom.commuter.Commuter.insert` method.
+
+.. code-block:: bash
+
+    >>> from time import time
+    >>> import pandas as pd
+    >>>
+    >>> df = pd.DataFrame({
+    ...     'name': ['Yeltsin'] * int(1e6),
+    ...     'age': [76] * int(1e6)})
+    >>>
+    >>> start = time()
+    >>> commuter.insert(table_name='people', data=df)
+    >>> print(f'processing time: {time() - start:.1f} sec')
+    processing time: 22.1 sec
+
+Now implementing the same operation with :func:`~pgcom.commuter.Commuter.copy_from`.
+
+.. code-block:: bash
+
+    >>> start = time()
+    >>> commuter.copy_from(table_name='people', data=df)
+    >>> print(f'processing time: {time() - start:.1f} sec')
+    processing time: 1.3 sec
+
+Set the ``format_data`` argument as ``True``, if you need to adjust data before applying
+:func:`~pgcom.commuter.Commuter.copy_from`. It will control columns order according
+the table information stored in database information schema and
+converts float types to integer if needed.
+
+.. code-block:: bash
+
+    >>> df = pd.DataFrame({'age': [76.0], 'name': ['Yeltsin']})
+    >>> commuter.copy_from('people', df)
+    pgcom.exc.CopyError: invalid input syntax for type integer: "Yeltsin"
+
+Without formatting we caught an error trying to insert a text data into the first table
+column, which has an integer type. Now set ``format_data`` as ``True`` and repeat the operation.
+
+.. code-block:: bash
+
+    >>> commuter.copy_from('people', df, format_data=True)
+    >>> n_obs = commuter.select_one('SELECT COUNT(*) FROM people')
+    >>> print(n_obs)
+    1
+
+When table has a constraint and the DataFrame contains rows conflicted
+with this constraint, the data cannot be added to the table
+with the :func:`~pgcom.commuter.Commuter.copy_from`. It is still possible to
+insert the data with the :func:`~pgcom.commuter.Commuter.execute` method,
+using for example ``INSERT ON CONFLICT`` statement
+([see here for details](https://www.postgresqltutorial.com/postgresql-upsert/)).
+
+Let's create a table with the primary key and insert one row.
+
+.. code-block:: bash
+
+    >>> commuter.execute(f"""CREATE TABLE people (
+    ...     name text PRIMARY KEY,
+    ...     age integer)""")
+    >>>
+    >>> commuter.insert_row('people', name='Yeltsin', age=76)
+
+Now, if we try to insert the same row we will catch an error.
+
+.. code-block:: bash
+
+    >>> commuter.copy_from('people', df, format_data=True)
+    pgcom.exc.CopyError: duplicate key value violates unique constraint "people_pkey"
+    DETAIL:  Key (name)=(Yeltsin) already exists.
+
+Using ``where`` argument, we can specify the ``WHERE`` clause of the ``DELETE`` statement,
+which will be executed before calling ``COPY FROM``. This means that all rows, where
+age is equal to 76, will be deleted from the table and then ``COPY FROM`` command
+will be called.
+
+.. code-block:: bash
+
+    >>> commuter.copy_from('people', df, format_data=True, where='age=76')
+    >>> n_obs = commuter.select_one('SELECT COUNT(*) FROM people')
+    >>> print(n_obs)
+    1
+

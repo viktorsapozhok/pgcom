@@ -1,6 +1,19 @@
 ChangeLog
 =========
 
+0.1.3 (2019-01-16)
+------------------
+
+* Added pending transaction handler to :func:`~pgcom.commuter.Commuter.copy_from`
+* Raise :class:`~pgcom.commuter.exc.ExectionError` when execute command fails
+
+0.1.2 (2019-01-16)
+------------------
+* Changed :func:`~pgcom.commuter.Commuter.select` method
+* Changed :func:`~pgcom.commuter.Commuter.insert` method
+* Fixed exception in :func:`~pgcom.commuter.Commuter.copy_from`
+* Deprecated ``sqlalchemy.engine`` usage
+
 0.1.1 (2019-01-10)
 ------------------
 

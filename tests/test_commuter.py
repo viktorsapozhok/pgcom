@@ -10,27 +10,15 @@ commuter = Commuter(**conn_params)
 
 
 def test_connection():
-    with commuter.connector.make_connection() as conn:
+    with commuter.connector.open_connection() as conn:
         assert conn is not None
 
 
 def test_connection_keywords():
     _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
 
-    with _commuter.connector.make_connection() as conn:
+    with _commuter.connector.open_connection() as conn:
         assert conn is not None
-
-
-def test_engine():
-    with commuter.connector.engine.connect() as conn:
-        assert conn.connection.is_valid
-
-
-def test_engine_keywords():
-    _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
-
-    with _commuter.connector.engine.connect() as conn:
-        assert conn.connection.is_valid
 
 
 def test_multiple_connection():
@@ -39,20 +27,8 @@ def test_multiple_connection():
     assert n_conn > 0
 
     for i in range(100):
-        with commuter.connector.make_connection() as conn:
+        with commuter.connector.open_connection() as conn:
             assert conn is not None
-
-    assert commuter.get_connections_count() - n_conn < 10
-
-
-def test_multiple_engine():
-    n_conn = commuter.get_connections_count()
-
-    assert n_conn > 0
-
-    for i in range(10000):
-        with commuter.connector.engine.connect() as conn:
-            assert conn.connection.is_valid
 
     assert commuter.get_connections_count() - n_conn < 10
 

@@ -23,10 +23,9 @@ from typing import (
 import numpy as np
 import pandas as pd
 import psycopg2
-from sqlalchemy import create_engine, exc
-from sqlalchemy.engine import Engine
+from psycopg2.extras import execute_batch
 
-from . import queries
+from . import exc, queries
 
 
 def fix_schema(func: Callable) -> Callable:
@@ -113,7 +112,6 @@ class Connector:
             if key not in ['schema']:
                 self.conn_params[key] = kwargs.get(key)
 
-        self.engine = self.make_engine()
         self.conn = None
 
     def __del__(self) -> None:
@@ -128,36 +126,20 @@ class Connector:
                f'schema={schema})'
 
     @contextmanager
-    def make_connection(self) -> Iterator[psycopg2.connect]:
+    def open_connection(self) -> Iterator[psycopg2.connect]:
         if self.conn is None:
-            self.set_connection()
+            self._set_connection()
 
         yield self.conn
 
         self.close_connection()
 
-    def make_engine(self) -> Engine:
-        """Create `SQLAlchemy` engine.
-        """
+    def close_connection(self) -> None:
+        if self.conn is not None:
+            self.conn.close()
+            self.conn = None
 
-        engine = 'postgresql://' + \
-                 self.user + ':' + \
-                 self.password + '@' + \
-                 self.host + ':' + \
-                 self.port + '/' + \
-                 self.db_name
-
-        for key in self.conn_params.keys():
-            engine += '?' + key + '=' + self.conn_params[key]
-
-        connect_args = defaultdict()  # type: Dict[str, Any]
-
-        if self.schema is not None:
-            connect_args['options'] = '-csearch_path=' + self.schema
-
-        return create_engine(engine, connect_args=connect_args)
-
-    def set_connection(self) -> None:
+    def _set_connection(self) -> None:
         """Setting `psycopg2` connection.
         """
 
@@ -172,11 +154,6 @@ class Connector:
             conn_params['options'] = f'--search_path={self.schema}'
 
         self.conn = psycopg2.connect(**conn_params)
-
-    def close_connection(self) -> None:
-        if self.conn is not None:
-            self.conn.close()
-            self.conn = None
 
 
 class Commuter:
@@ -226,7 +203,7 @@ class Commuter:
             Pandas.DataFrame.
         """
 
-        with self.connector.engine.connect() as conn:
+        with self.connector.open_connection() as conn:
             df = pd.read_sql_query(cmd, conn)
 
         return df
@@ -262,8 +239,7 @@ class Commuter:
             self,
             table_name: str,
             data: pd.DataFrame,
-            schema: str = 'public',
-            chunksize: Optional[int] = None
+            schema: str = 'public'
     ) -> None:
         """Write records stored in a DataFrame to database.
 
@@ -274,32 +250,33 @@ class Commuter:
                 Pandas.DataFrame with the data to be inserted.
             schema:
                 Name of the database schema.
-            chunksize:
-                Rows will be written in batches of this size at a time.
         """
 
-        with self.connector.engine.connect() as conn:
+        table_name = self._table_name(table_name, schema)
+        columns = ','.join(list(data.columns))
+        values = 'VALUES({})'.format(','.join(['%s' for _ in data.columns]))
+        cmd = 'INSERT INTO {} ({}) {}'.format(table_name, columns, values)
+
+        with self.connector.open_connection() as conn:
             try:
-                data.to_sql(
-                    table_name,
-                    con=conn,
-                    schema=schema,
-                    if_exists='append',
-                    index=False,
-                    chunksize=chunksize)
-            except (ValueError, exc.IntegrityError) as e:
-                raise ValueError(e)
+                with conn.cursor() as cur:
+                    execute_batch(cur, cmd, data.values)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise exc.ExecutionError(e)
+
+        self.connector.close_connection()
 
     def execute(
             self,
             cmd: str,
-            vars: Optional[Sequence[Any]] = None,
-            commit: bool = True
+            vars: Optional[Sequence[Any]] = None
     ) -> None:
         """Execute a database operation (query or command).
         """
 
-        with self.connector.make_connection() as conn:
+        with self.connector.open_connection() as conn:
             try:
                 with conn.cursor() as cur:
                     if vars is None:
@@ -307,30 +284,29 @@ class Commuter:
                     else:
                         cur.execute(cmd, vars)
 
-                if commit:
-                    conn.commit()
-            except psycopg2.DatabaseError as e:
-                # roll back the pending transaction
-                if commit:
-                    conn.rollback()
-                raise e
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise exc.ExecutionError(e)
 
         self.connector.close_connection()
 
     def execute_script(
             self,
-            path2script: str,
-            commit: bool = True
+            path2script: str
     ) -> None:
         with open(path2script, 'r') as fh:
             script = fh.read()
 
-        with self.connector.make_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(script)
+        with self.connector.open_connection() as conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(script)
 
-            if commit:
                 conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise exc.ExecutionError(e)
 
         self.connector.close_connection()
 
@@ -404,7 +380,7 @@ class Commuter:
         if return_id is not None:
             cmd += 'RETURNING ' + return_id
 
-        with self.connector.make_connection() as conn:
+        with self.connector.open_connection() as conn:
             try:
                 with conn.cursor() as cur:
                     if values is None:
@@ -413,11 +389,10 @@ class Commuter:
                         cur.execute(cmd, values)
 
                     sid = cur.fetchone()[0]
-                    conn.commit()
-            except psycopg2.DatabaseError as e:
-                # roll back the pending transaction
+                conn.commit()
+            except Exception as e:
                 conn.rollback()
-                raise e
+                raise exc.ExecutionError(e)
 
         self.connector.close_connection()
 
@@ -455,26 +430,23 @@ class Commuter:
 
         table_name = self._table_name(table_name, schema)
 
-        with self.connector.make_connection() as conn:
-            with conn.cursor() as cur:
-                if where is not None:
-                    cur.execute(f'DELETE FROM {table_name} WHERE {where}')
+        with self.connector.open_connection() as conn:
+            try:
+                with conn.cursor() as cur:
+                    if where is not None:
+                        cur.execute(f'DELETE FROM {table_name} WHERE {where}')
 
-                # DataFrame to buffer
-                s_buf = StringIO()
-                data.to_csv(s_buf, index=False, header=False)
-                s_buf.seek(0)
+                    # DataFrame to buffer
+                    s_buf = StringIO()
+                    data.to_csv(s_buf, index=False, header=False)
+                    s_buf.seek(0)
 
-                # implement insert
-                try:
                     cur.copy_from(s_buf, table_name, sep=',', null='')
-                except (ValueError,
-                        exc.ProgrammingError,
-                        psycopg2.ProgrammingError,
-                        psycopg2.IntegrityError) as e:
-                    raise ValueError(e)
 
-            conn.commit()
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise exc.CopyError(e)
 
         self.connector.close_connection()
 

@@ -2,7 +2,7 @@
 from os import path
 from setuptools import setup
 
-version = '0.1.1'
+version = '0.1.3'
 
 root_dir = path.abspath(path.dirname(__file__))
 
@@ -34,7 +34,6 @@ setup(
     zip_safe=False,
     install_requires=[
         'pandas>=0.24.0',
-        'sqlalchemy>=1.3.3',
         'psycopg2-binary>=2.7.7'
     ],
     extras_require={

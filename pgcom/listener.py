@@ -73,7 +73,7 @@ class Listener(Commuter):
                 Timeout in seconds.
         """
 
-        with self.connector.make_connection() as conn:
+        with self.connector.open_connection() as conn:
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
             with conn.cursor() as cur:
