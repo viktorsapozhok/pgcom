@@ -25,5 +25,3 @@ Psycopg adapter to simplify the usage of basic SQL operators.
    changelog
 
 License is MIT.
-
-.. _pgcom: https://github.com/viktorsapozhok/pgcom

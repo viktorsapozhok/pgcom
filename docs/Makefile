@@ -5,7 +5,6 @@
 # from the environment for the first two.
 SPHINXOPTS    ?=
 SPHINXBUILD   ?= sphinx-build
-SPHINXPROJ    = pgcom
 SOURCEDIR     = source
 BUILDDIR      = build
 
