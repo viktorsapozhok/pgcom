@@ -4,6 +4,7 @@
 [![Build Status](https://travis-ci.org/viktorsapozhok/pgcom.svg?branch=master)](https://travis-ci.org/viktorsapozhok/pgcom)
 [![codecov](https://codecov.io/gh/viktorsapozhok/pgcom/branch/master/graph/badge.svg)](https://codecov.io/gh/viktorsapozhok/pgcom)
 [![pypi](https://img.shields.io/pypi/v/pgcom.svg)](https://pypi.python.org/pypi/pgcom)
+[![Documentation Status](https://readthedocs.org/projects/pgcom/badge/?version=latest)](https://pgcom.readthedocs.io/en/latest/?badge=latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 Communication manager for PostgreSQL database, provides a collection of wrappers over
