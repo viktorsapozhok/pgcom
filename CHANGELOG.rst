@@ -5,14 +5,16 @@ ChangeLog
 ------------------
 
 * Added pending transaction handler to :func:`~pgcom.commuter.Commuter.copy_from`
-* Raise :class:`~pgcom.commuter.exc.ExectionError` when execute command fails
+* Raised :class:`~pgcom.commuter.exc.ExectionError` when execute command fails
+* Replaced :func:`pandas.to_sql` in :func:`~pgcom.commuter.Commuter.insert` by :func:`psycopg.execute_batch`
+* Changed sqlalchemy engine url builder
+* Added new tests
 
 0.1.2 (2019-01-16)
 ------------------
 * Changed :func:`~pgcom.commuter.Commuter.select` method
 * Changed :func:`~pgcom.commuter.Commuter.insert` method
 * Fixed exception in :func:`~pgcom.commuter.Commuter.copy_from`
-* Deprecated ``sqlalchemy.engine`` usage
 
 0.1.1 (2019-01-10)
 ------------------

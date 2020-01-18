@@ -3,7 +3,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from pgcom import Commuter
+from pgcom import Commuter, exc
 from .conftest import conn_params
 
 commuter = Commuter(**conn_params)
@@ -33,14 +33,47 @@ def test_multiple_connection():
     assert commuter.get_connections_count() - n_conn < 10
 
 
+def test_engine():
+    with commuter.connector.engine.connect() as conn:
+        assert conn.connection.is_valid
+
+
+def test_engine_keywords():
+    _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
+
+    with _commuter.connector.engine.connect() as conn:
+        assert conn.connection.is_valid
+
+
+def test_multiple_engine():
+    n_conn = commuter.get_connections_count()
+
+    assert n_conn > 0
+
+    for i in range(10000):
+        with commuter.connector.engine.connect() as conn:
+            assert conn.connection.is_valid
+
+    assert commuter.get_connections_count() - n_conn < 10
+
+
+def test_repr():
+    assert repr(commuter)[0] == '('
+    assert repr(commuter)[-1] == ')'
+
+
 def test_execute():
     delete_table(table_name='test_table')
-
     assert not commuter.is_table_exist('test_table')
 
     commuter.execute('create table if not exists test_table(var_1 integer)')
-
     assert commuter.is_table_exist('test_table')
+
+    try:
+        commuter.execute('select 1 from fake_table')
+        assert False
+    except exc.ExecutionError:
+        assert True
 
     delete_table(table_name='test_table')
 
@@ -68,25 +101,45 @@ def test_select_insert():
     delete_table(table_name='test_table')
 
 
+def test_multiple_select():
+    delete_table(table_name='test_table')
+    commuter.execute(create_test_table())
+    commuter.insert('test_table', create_test_data())
+
+    n_conn = commuter.get_connections_count()
+
+    for i in range(300):
+        df = commuter.select('select * from test_table')
+        assert len(df) == 3
+
+    assert commuter.get_connections_count() - n_conn < 10
+
+    delete_table(table_name='test_table')
+
+
+def test_insert():
+    try:
+        commuter.insert('fake_table', create_test_data())
+        assert False
+    except exc.ExecutionError:
+        assert True
+
+
 def test_select_one():
     delete_table(table_name='test_table')
 
     commuter.execute(create_test_table())
 
-    value = commuter.select_one(
-        cmd='SELECT MAX(var_2) FROM test_table',
-        default=0)
-
+    cmd = 'SELECT MAX(var_2) FROM test_table'
+    value = commuter.select_one(cmd=cmd, default=0)
     assert value == 0
 
     commuter.copy_from('test_table', create_test_data())
     value = commuter.select_one('SELECT MAX(var_2) FROM test_table')
-
     assert value == 3
 
     cmd = 'SELECT MAX(var_2) FROM test_table WHERE var_2 > 10'
     value = commuter.select_one(cmd=cmd, default=-1)
-
     assert value == -1
 
     delete_table(table_name='test_table')
@@ -108,13 +161,18 @@ def test_copy_from():
     delete_table(table_name='test_table')
 
     commuter.execute(create_test_table())
-    commuter.copy_from('test_table', create_test_data())
 
+    commuter.copy_from('test_table', create_test_data())
     df = commuter.select('select * from test_table')
     df['date'] = pd.to_datetime(df['var_1'])
-
     assert df['date'][0].date() == datetime.now().date()
     assert len(df) == 3
+
+    try:
+        commuter.copy_from('fake_table', create_test_data())
+        assert False
+    except exc.CopyError:
+        assert True
 
     delete_table(table_name='test_table')
 
@@ -125,6 +183,7 @@ def test_copy_from_schema():
     commuter.execute(create_test_table(schema='model'))
 
     df = create_test_data()
+    df['var_2'] = [1, 2, 3.01]
     df['new_var_1'] = 1
     df.insert(loc=0, column='new_var_2', value=[3, 2, 1])
 
@@ -301,17 +360,24 @@ def test_insert_row_return():
     assert df['var_1'][0] == datetime(2019, 12, 9)
 
     cmd = f"""
-    INSERT INTO
-        model.test_table (var_1, var_2, var_3)
-    VALUES (%s, %s, %s)
+    INSERT INTO model.test_table (var_1, var_2, var_3)
+        VALUES (%s, %s, %s)
     """
 
     row_id = commuter.insert_return(
         cmd=cmd,
         values=(datetime(2019, 12, 9), 8, 'test'),
         return_id='id')
-
     assert row_id == 2
+
+    try:
+        _ = commuter.insert_return(
+            cmd=f'insert into model.test_table VALUES (%s,%s)',
+            values=(1, 1),
+            return_id='id')
+        assert False
+    except exc.ExecutionError:
+        assert True
 
     delete_table(table_name='test_table', schema='model')
 

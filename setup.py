@@ -34,7 +34,8 @@ setup(
     zip_safe=False,
     install_requires=[
         'pandas>=0.24.0',
-        'psycopg2-binary>=2.7.7'
+        'psycopg2-binary>=2.7.7',
+        'sqlalchemy>=1.3.12'
     ],
     extras_require={
         'test': ['pytest', 'tox'],

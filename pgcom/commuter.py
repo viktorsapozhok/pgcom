@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 __all__ = [
     'Connector',
     'Commuter'
@@ -24,6 +23,9 @@ import numpy as np
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_batch
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
+from sqlalchemy.engine.url import URL
 
 from . import exc, queries
 
@@ -112,6 +114,7 @@ class Connector:
             if key not in ['schema']:
                 self.conn_params[key] = kwargs.get(key)
 
+        self.engine = self._make_engine()
         self.conn = None
 
     def __del__(self) -> None:
@@ -154,6 +157,22 @@ class Connector:
             conn_params['options'] = f'--search_path={self.schema}'
 
         self.conn = psycopg2.connect(**conn_params)
+
+    def _make_engine(self) -> Engine:
+        conn_url = URL(
+            drivername='postgresql',
+            username=self.user,
+            password=self.password,
+            host=self.host,
+            port=self.port,
+            database=self.db_name)
+
+        connect_args = self.conn_params
+
+        if self.schema is not None:
+            connect_args['options'] = '-csearch_path=' + self.schema
+
+        return create_engine(conn_url, connect_args=connect_args)
 
 
 class Commuter:
@@ -203,7 +222,7 @@ class Commuter:
             Pandas.DataFrame.
         """
 
-        with self.connector.open_connection() as conn:
+        with self.connector.engine.connect() as conn:
             df = pd.read_sql_query(cmd, conn)
 
         return df
@@ -297,18 +316,7 @@ class Commuter:
     ) -> None:
         with open(path2script, 'r') as fh:
             script = fh.read()
-
-        with self.connector.open_connection() as conn:
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(script)
-
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                raise exc.ExecutionError(e)
-
-        self.connector.close_connection()
+        self.execute(script)
 
     @fix_schema
     def insert_row(
