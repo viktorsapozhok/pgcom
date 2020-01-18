@@ -23,9 +23,14 @@ import numpy as np
 import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_batch
-from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
-from sqlalchemy.engine.url import URL
+
+try:
+    from sqlalchemy import create_engine
+    from sqlalchemy.engine import Engine
+    from sqlalchemy.engine.url import URL
+    _available = True
+except ImportError:
+    _available = False
 
 from . import exc, queries
 
@@ -158,21 +163,26 @@ class Connector:
 
         self.conn = psycopg2.connect(**conn_params)
 
-    def _make_engine(self) -> Engine:
-        conn_url = URL(
-            drivername='postgresql',
-            username=self.user,
-            password=self.password,
-            host=self.host,
-            port=self.port,
-            database=self.db_name)
+    def _make_engine(self) -> Union[Engine, None]:
+        if _available:
+            conn_url = URL(
+                drivername='postgresql',
+                username=self.user,
+                password=self.password,
+                host=self.host,
+                port=self.port,
+                database=self.db_name)
 
-        connect_args = self.conn_params
+            connect_args = self.conn_params
 
-        if self.schema is not None:
-            connect_args['options'] = '-csearch_path=' + self.schema
+            if self.schema is not None:
+                connect_args['options'] = '-csearch_path=' + self.schema
 
-        return create_engine(conn_url, connect_args=connect_args)
+            engine = create_engine(conn_url, connect_args=connect_args)
+        else:
+            engine = None
+
+        return engine
 
 
 class Commuter:
@@ -222,8 +232,11 @@ class Commuter:
             Pandas.DataFrame.
         """
 
-        with self.connector.engine.connect() as conn:
-            df = pd.read_sql_query(cmd, conn)
+        if self.connector.engine is not None:
+            with self.connector.engine.connect() as conn:
+                df = pd.read_sql_query(cmd, conn)
+        else:
+            df = pd.DataFrame()
 
         return df
 
@@ -276,47 +289,26 @@ class Commuter:
         values = 'VALUES({})'.format(','.join(['%s' for _ in data.columns]))
         cmd = 'INSERT INTO {} ({}) {}'.format(table_name, columns, values)
 
-        with self.connector.open_connection() as conn:
-            try:
-                with conn.cursor() as cur:
-                    execute_batch(cur, cmd, data.values)
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                raise exc.ExecutionError(e)
-
-        self.connector.close_connection()
+        self._execute(cmd=cmd, values=data.values, batch=True)
 
     def execute(
             self,
             cmd: str,
-            vars: Optional[Sequence[Any]] = None
+            values: Optional[Sequence[Any]] = None
     ) -> None:
         """Execute a database operation (query or command).
         """
 
-        with self.connector.open_connection() as conn:
-            try:
-                with conn.cursor() as cur:
-                    if vars is None:
-                        cur.execute(cmd)
-                    else:
-                        cur.execute(cmd, vars)
-
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                raise exc.ExecutionError(e)
-
-        self.connector.close_connection()
+        self._execute(cmd=cmd, values=values)
 
     def execute_script(
             self,
             path2script: str
     ) -> None:
         with open(path2script, 'r') as fh:
-            script = fh.read()
-        self.execute(script)
+            cmd = fh.read()
+
+        self._execute(cmd=cmd)
 
     @fix_schema
     def insert_row(
@@ -361,7 +353,7 @@ class Commuter:
         if return_id is not None:
             sid = self.insert_return(cmd, return_id=return_id)
         else:
-            self.execute(cmd)
+            self._execute(cmd=cmd)
 
         return sid
 
@@ -400,7 +392,7 @@ class Commuter:
                 conn.commit()
             except Exception as e:
                 conn.rollback()
-                raise exc.ExecutionError(e)
+                raise exc.QueryExecutionError(e)
 
         self.connector.close_connection()
 
@@ -602,6 +594,40 @@ class Commuter:
                 df = pd.DataFrame()
 
         return df
+
+    def _execute(
+            self,
+            cmd: str,
+            values: Optional[Sequence[Any]] = None,
+            commit: Optional[bool] = True,
+            batch: Optional[bool] = False
+    ) -> None:
+        with self.connector.open_connection() as conn:
+            try:
+                with conn.cursor() as cur:
+                    if batch:
+                        execute_batch(cur, cmd, values)
+                    else:
+                        if values is None:
+                            cur.execute(cmd)
+                        else:
+                            cur.execute(cmd, values)
+                if commit:
+                    conn.commit()
+            except Exception as e:
+                try:
+                    conn.rollback()
+                except Exception as ex:
+                    exc.raise_with_traceback(
+                        exc.QueryExecutionError(
+                            f'Execution failed on sql: {cmd}\n{ex}\n '
+                            f'unable to rollback'))
+
+                exc.raise_with_traceback(
+                    exc.QueryExecutionError(
+                        f'Execution failed on sql: {cmd}\n{e}\n'))
+
+        self.connector.close_connection()
 
     def _table_columns(
             self,

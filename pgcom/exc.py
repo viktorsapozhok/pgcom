@@ -1,4 +1,7 @@
-class ExecutionError(Exception):
+import sys
+
+
+class QueryExecutionError(Exception):
     """Raised when query execution fails.
     """
 
@@ -10,3 +13,12 @@ class CopyError(Exception):
     """
 
     pass
+
+
+def raise_with_traceback(exc: Exception) -> None:
+    """Raise exception with existing traceback.
+    """
+
+    _, _, traceback = sys.exc_info()
+
+    raise exc.with_traceback(traceback)

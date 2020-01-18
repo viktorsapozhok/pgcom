@@ -72,7 +72,7 @@ def test_execute():
     try:
         commuter.execute('select 1 from fake_table')
         assert False
-    except exc.ExecutionError:
+    except exc.QueryExecutionError:
         assert True
 
     delete_table(table_name='test_table')
@@ -121,7 +121,7 @@ def test_insert():
     try:
         commuter.insert('fake_table', create_test_data())
         assert False
-    except exc.ExecutionError:
+    except exc.QueryExecutionError:
         assert True
 
 
@@ -228,7 +228,7 @@ def test_execute_with_params():
     commuter.execute(cmd=cmd)
     commuter.execute(
         cmd="INSERT INTO people VALUES (%s, %s)",
-        vars=(who, age))
+        values=(who, age))
 
     df = commuter.select('SELECT * FROM people')
 
@@ -376,7 +376,7 @@ def test_insert_row_return():
             values=(1, 1),
             return_id='id')
         assert False
-    except exc.ExecutionError:
+    except exc.QueryExecutionError:
         assert True
 
     delete_table(table_name='test_table', schema='model')
