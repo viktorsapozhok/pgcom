@@ -16,14 +16,7 @@ import sphinx_rtd_theme
 
 sys.path.insert(0, os.path.abspath('../..'))
 
-autodoc_mock_imports = [
-    'numpy',
-    'pandas',
-    'psycopg2',
-    'sqlalchemy'
-]
-
-import pgcom
+from pgcom.version import __version__
 
 # -- Project information -----------------------------------------------------
 
@@ -32,8 +25,8 @@ copyright = '2020, viktorsapozhok'
 author = 'viktorsapozhok'
 user = 'viktorsapozhok'
 
-version = pgcom.__version__
-release = pgcom.__version__
+version = __version__
+release = __version__
 
 # The default language to highlight source code in.
 highlight_language = 'python'
