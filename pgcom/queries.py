@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 __all__ = [
     'primary_key',
     'foreign_key',

@@ -4,10 +4,10 @@ ChangeLog
 0.1.3 (2019-01-16)
 ------------------
 
-* Added support for the case if sqlalchemy is missing
+* Added support for the missing SQLAlchemy dependency
 * Added :func:`~pgcom.commuter.Commuter._execute` (`#2 <https://github.com/viktorsapozhok/pgcom/issues/2>`_)
 * Added pending transaction handler to :func:`~pgcom.commuter.Commuter.copy_from`
-* Raised :class:`~pgcom.commuter.exc.ExectionError` when execute command fails
+* Raised :class:`~pgcom.commuter.exc.ExecutionError` when execute command fails
 * Replaced :func:`pandas.to_sql` in :func:`~pgcom.commuter.Commuter.insert` by :func:`psycopg.execute_batch`
 * Changed sqlalchemy engine url builder
 * Added new tests

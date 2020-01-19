@@ -250,3 +250,66 @@ will be called.
     >>> print(n_obs)
     1
 
+Resolve primary conflicts
+-------------------------
+
+In the last example, we deleted rows from the table before using
+:func:`~pgcom.commuter.Commuter.copy_from`. In contrast to it,
+the :func:`~pgcom.commuter.Commuter.resolve_primary_conflicts` method can be used
+to control the data integrity and, instead of removing rows from the table,
+remove it from the DataFrame.
+
+To implement it, the method selects data from the table and removes all
+rows from the given DataFrame, which violate primary key constraint
+in the selected data. To reduce the amount of querying data (when table is large),
+you need to specify ``where`` argument. It specifies ``WHERE`` clause in
+the ``SELECT`` query.
+
+.. code-block:: bash
+
+    >>> commuter.execute(f"""CREATE TABLE people (
+    ...     id integer PRIMARY KEY, name text, age integer)""")
+    >>>
+    >>> df = pd.DataFrame({
+    ...     'id': [1,2,3,4,5],
+    ...     'name': ['Brezhnev', 'Andropov', 'Chernenko', 'Gorbachev', 'Yeltsin'],
+    ...     'age': [75, 69, 73, 89, 76]})
+    >>>
+    >>> commuter.copy_from('people', df)
+    >>> print(df)
+       id       name  age
+    0   1   Brezhnev   75
+    1   2   Andropov   69
+    2   3  Chernenko   73
+    3   4  Gorbachev   89
+    4   5    Yeltsin   76
+
+Assume now, that we need to add new rows to the table.
+
+.. code-block:: bash
+
+    >>> new_data = pd.DataFrame({
+    ...     'id': [6,3],
+    ...     'name': ['Khrushchev', 'Putin'],
+    ...     'age': [77, 67]})
+    >>> print(new_data)
+       id        name  age
+    0   6  Khrushchev   77
+    1   3       Putin   67
+
+We apply :func:`~pgcom.commuter.Commuter.resolve_primary_conflicts` to sanitize
+the new data before copying and specify ``where`` argument to compare the new
+entries only across the people older than 60 (to reduce the complexity).
+
+.. code-block:: bash
+
+    >>> new_data = commuter.resolve_primary_conflicts(
+    ...     table_name='people',
+    ...     data=new_data,
+    ...     where='age > 60')
+    >>> print(new_data)
+       id        name  age
+    0   6  Khrushchev   77
+
+Rows with conflicted keys have been deleted and
+:func:`~pgcom.commuter.Commuter.copy_from` can be now used without a doubt.

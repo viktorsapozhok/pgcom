@@ -34,16 +34,12 @@ setup(
     zip_safe=False,
     install_requires=[
         'pandas>=0.24.0',
-        'psycopg2-binary>=2.7.7',
-        'sqlalchemy>=1.3.12'
+        'psycopg2-binary>=2.7.7'
     ],
     extras_require={
+        'sql': ['sqlalchemy>=1.3.12'],
         'test': ['pytest', 'tox'],
-        'docs': [
-            'sphinx',
-            'sphinx_rtd_theme',
-            'sphinx-autodoc-typehints'
-        ]
+        'docs': ['sphinx', 'sphinx_rtd_theme', 'sphinx-autodoc-typehints']
     },
     python_requires='>=3.6',
 )
