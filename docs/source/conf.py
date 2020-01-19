@@ -12,33 +12,10 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../..'))
-
 import sphinx_rtd_theme
 import pgcom
 
-from unittest.mock import MagicMock
-
-
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-        if name == '_mock_methods':
-            raise AttributeError()
-        return Mock()
-
-
-MOCK_MODULES = [
-    'numpy',
-    'pandas',
-    'psycopg2',
-    'psycopg2.extensions',
-    'psycopg2.extras',
-    'sqlalchemy',
-    'sqlalchemy.engine.url',
-]
-
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+sys.path.insert(0, os.path.abspath('../..'))
 
 # -- Project information -----------------------------------------------------
 
