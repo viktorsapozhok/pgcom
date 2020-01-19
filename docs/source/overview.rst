@@ -148,7 +148,7 @@ Using :func:`~pgcom.commuter.Commuter.insert_return`, you need to specify SQL st
     >>> print(num)
     2
 
-Insert with COPY FROM
+Insert with copy from
 ---------------------
 
 PostgreSQL ``COPY FROM`` command copies data from a file-system file to a table
@@ -319,8 +319,10 @@ from the ``parent_table`` and removes all rows from the given DataFrame,
 which violate foreign key constraint in the selected data.
 
 .. code-block:: python
+
     df = commuter.resolve_foreign_conflicts(
         table_name='table_name',
         parent_name='parent_table_name',
         data=df,
         where='condition to reduce the selected data')
+
