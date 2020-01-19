@@ -4,23 +4,19 @@ Overview
 Basic Usage
 -----------
 
-To initialize a new commuter, you need to set the basic connection parameters:
-
-.. code-block:: python
-
-    conn_params = {
-        'host': 'localhost',
-        'port': '5432',
-        'user': 'postgres',
-        'password': 'password',
-        'db_name': 'test_db'}
-
+To initialize a new commuter, you need to set the basic connection parameters
 and create a new commuter instance:
 
 .. code-block:: python
 
     from pgcom import Commuter
-    commuter = Commuter(**conn_params)
+
+    commuter = Commuter(
+        host='localhost',
+        port='5432',
+        user='postgres',
+        password='password',
+        db_name='test_db')
 
 Any other connection parameter can be passed as a keyword.
 The list of the supported parameters
@@ -41,7 +37,7 @@ Execute a database operation (query or command):
     # insert to table
     commuter.execute(
         cmd='INSERT INTO people VALUES (%s, %s)',
-        vars=('Yeltsin', 76))
+        values=('Yeltsin', 76))
 
     # delete table
     commuter.execute('DROP TABLE people')
@@ -313,3 +309,18 @@ entries only across the people older than 60 (to reduce the complexity).
 
 Rows with conflicted keys have been deleted and
 :func:`~pgcom.commuter.Commuter.copy_from` can be now used without a doubt.
+
+Resolve foreign conflicts
+-------------------------
+
+To sanitize the DataFrame for the case of potential conflicts on the foreign key,
+use :func:`~pgcom.commuter.Commuter.resolve_foreign_conflicts`. It selects data
+from the ``parent_table`` and removes all rows from the given DataFrame,
+which violate foreign key constraint in the selected data.
+
+.. code-block:: python
+    df = commuter.resolve_foreign_conflicts(
+        table_name='table_name',
+        parent_name='parent_table_name',
+        data=df,
+        where='condition to reduce the selected data')

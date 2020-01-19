@@ -12,4 +12,4 @@ Psycopg adapter to simplify the usage of basic SQL operators.
    reference/index
    changelog
 
-License is MIT.
+MIT License (see `LICENSE <https://github.com/viktorsapozhok/pgcom/blob/master/LICENSE>`_).
