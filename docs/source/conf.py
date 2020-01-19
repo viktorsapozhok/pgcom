@@ -17,6 +17,29 @@ sys.path.insert(0, os.path.abspath('../..'))
 import sphinx_rtd_theme
 import pgcom
 
+from unittest.mock import MagicMock
+
+
+class Mock(MagicMock):
+    @classmethod
+    def __getattr__(cls, name):
+        if name == '_mock_methods':
+            raise AttributeError()
+        return Mock()
+
+
+MOCK_MODULES = [
+    'numpy',
+    'pandas',
+    'psycopg2',
+    'psycopg2.extensions',
+    'psycopg2.extras',
+    'sqlalchemy',
+    'sqlalchemy.engine.url',
+]
+
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
 # -- Project information -----------------------------------------------------
 
 project = 'pgcom'
@@ -66,7 +89,7 @@ exclude_patterns = []
 
 # Disable documentation inheritance so as to avoid inheriting docstrings in a
 # different format.
-autodoc_inherit_docstrings = True
+autodoc_inherit_docstrings = False
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
