@@ -3,8 +3,8 @@
 Commuter
 ========
 
-.. autoclass:: pgcom.commuter.Connector
-    :members:
+.. autoclass:: Connector
+   :members:
 
-.. autoclass:: pgcom.commuter.Commuter
-    :members:
+.. autoclass:: Commuter
+   :members:
