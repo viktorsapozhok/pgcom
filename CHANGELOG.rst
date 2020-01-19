@@ -4,6 +4,8 @@ ChangeLog
 0.1.3 (2019-01-16)
 ------------------
 
+* Added option to use without installed sqlalchemy
+* Added :func:`~pgcom.commuter.Commuter._execute`
 * Added pending transaction handler to :func:`~pgcom.commuter.Commuter.copy_from`
 * Raised :class:`~pgcom.commuter.exc.ExectionError` when execute command fails
 * Replaced :func:`pandas.to_sql` in :func:`~pgcom.commuter.Commuter.insert` by :func:`psycopg.execute_batch`
