@@ -64,6 +64,13 @@ language = None
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
 
+autodoc_mock_imports = [
+    'numpy',
+    'pandas',
+    'psycopg2',
+    'sqlalchemy'
+]
+
 # Disable documentation inheritance so as to avoid inheriting docstrings in a
 # different format.
 autodoc_inherit_docstrings = False
