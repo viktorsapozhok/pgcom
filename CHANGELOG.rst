@@ -1,7 +1,7 @@
 ChangeLog
 =========
 
-0.1.3 (2019-01-16)
+0.1.3 (2019-01-19)
 ------------------
 
 * Added support for the missing SQLAlchemy dependency (`#1 <https://github.com/viktorsapozhok/pgcom/issues/1>`_)

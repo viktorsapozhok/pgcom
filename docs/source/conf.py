@@ -66,7 +66,7 @@ exclude_patterns = []
 
 # Disable documentation inheritance so as to avoid inheriting docstrings in a
 # different format.
-autodoc_inherit_docstrings = False
+autodoc_inherit_docstrings = True
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
