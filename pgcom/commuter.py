@@ -27,7 +27,6 @@ from psycopg2.extras import execute_batch
 
 try:
     from sqlalchemy import create_engine
-    from sqlalchemy.engine import Engine
     from sqlalchemy.engine.url import URL
     _available = True
 except ImportError:
@@ -120,8 +119,11 @@ class Connector:
             if key not in ['schema']:
                 self.conn_params[key] = kwargs.get(key)
 
-        self.engine = self._make_engine()
         self.conn = None
+        self.engine = None
+
+        if _available:
+            self._make_engine()
 
     def __del__(self) -> None:
         self.close_connection()
@@ -164,26 +166,21 @@ class Connector:
 
         self.conn = psycopg2.connect(**conn_params)
 
-    def _make_engine(self) -> Union[Engine, None]:
-        if _available:
-            conn_url = URL(
-                drivername='postgresql',
-                username=self.user,
-                password=self.password,
-                host=self.host,
-                port=self.port,
-                database=self.db_name)
+    def _make_engine(self) -> None:
+        conn_url = URL(
+            drivername='postgresql',
+            username=self.user,
+            password=self.password,
+            host=self.host,
+            port=self.port,
+            database=self.db_name)
 
-            connect_args = self.conn_params
+        connect_args = self.conn_params
 
-            if self.schema is not None:
-                connect_args['options'] = '-csearch_path=' + self.schema
+        if self.schema is not None:
+            connect_args['options'] = '-csearch_path=' + self.schema
 
-            engine = create_engine(conn_url, connect_args=connect_args)
-        else:
-            engine = None
-
-        return engine
+        self.engine = create_engine(conn_url, connect_args=connect_args)
 
 
 class Commuter:

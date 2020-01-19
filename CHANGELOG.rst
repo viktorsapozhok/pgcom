@@ -4,7 +4,7 @@ ChangeLog
 0.1.3 (2019-01-16)
 ------------------
 
-* Added support for the missing SQLAlchemy dependency
+* Added support for the missing SQLAlchemy dependency (`#1 <https://github.com/viktorsapozhok/pgcom/issues/1>`_)
 * Added :func:`~pgcom.commuter.Commuter._execute` (`#2 <https://github.com/viktorsapozhok/pgcom/issues/2>`_)
 * Added pending transaction handler to :func:`~pgcom.commuter.Commuter.copy_from`
 * Raised :class:`~pgcom.commuter.exc.ExecutionError` when execute command fails
