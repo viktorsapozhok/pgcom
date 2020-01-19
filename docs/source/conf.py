@@ -12,10 +12,11 @@
 #
 import os
 import sys
-import sphinx_rtd_theme
 
+autodoc_mock_imports = ['numpy']
 sys.path.insert(0, os.path.abspath('../..'))
 
+import sphinx_rtd_theme
 from pgcom.version import __version__
 
 # -- Project information -----------------------------------------------------
