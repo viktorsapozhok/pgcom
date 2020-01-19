@@ -13,6 +13,7 @@ from typing import (
     Callable,
     Dict,
     Iterator,
+    List,
     Optional,
     Sequence,
     Tuple,
@@ -236,7 +237,8 @@ class Commuter:
             with self.connector.engine.connect() as conn:
                 df = pd.read_sql_query(cmd, conn)
         else:
-            df = pd.DataFrame()
+            records, columns = self._execute(cmd)
+            df = pd.DataFrame.from_records(records, columns=columns)
 
         return df
 
@@ -254,10 +256,10 @@ class Commuter:
                 If query result is empty, then return default value.
         """
 
-        df = self.select(cmd)
+        fetched, _ = self._execute(cmd)
 
         try:
-            value = df.iloc[0, 0]
+            value = fetched[0][0]
 
             if value is None:
                 value = default
@@ -375,26 +377,15 @@ class Commuter:
                 Name of the returned serial key.
         """
 
-        sid = None
-
         if return_id is not None:
             cmd += 'RETURNING ' + return_id
 
-        with self.connector.open_connection() as conn:
-            try:
-                with conn.cursor() as cur:
-                    if values is None:
-                        cur.execute(cmd)
-                    else:
-                        cur.execute(cmd, values)
+        fetched, _ = self._execute(cmd, values)
 
-                    sid = cur.fetchone()[0]
-                conn.commit()
-            except Exception as e:
-                conn.rollback()
-                raise exc.QueryExecutionError(e)
-
-        self.connector.close_connection()
+        try:
+            sid = fetched[0][0]
+        except IndexError:
+            sid = 0
 
         return sid
 
@@ -601,7 +592,30 @@ class Commuter:
             values: Optional[Sequence[Any]] = None,
             commit: Optional[bool] = True,
             batch: Optional[bool] = False
-    ) -> None:
+    ) -> Tuple[List[Any], List[str]]:
+        """Execute a database operation, query or command.
+
+        Args:
+            cmd:
+                SQL command.
+            values:
+                Query parameters.
+            commit:
+                Commit results if True.
+            batch:
+                Use execute_batch method if True.
+
+        Returns:
+            List of rows of a query result and list of column names.
+            Two empty lists are returned if there is no records to fetch.
+
+        Raises:
+            QueryExecutionError if execution fails.
+        """
+
+        fetched = []
+        columns = []
+
         with self.connector.open_connection() as conn:
             try:
                 with conn.cursor() as cur:
@@ -612,6 +626,11 @@ class Commuter:
                             cur.execute(cmd)
                         else:
                             cur.execute(cmd, values)
+
+                    if cur.description is not None:
+                        fetched = cur.fetchall()
+                        columns = [desc[0] for desc in cur.description]
+
                 if commit:
                     conn.commit()
             except Exception as e:
@@ -628,6 +647,8 @@ class Commuter:
                         f'Execution failed on sql: {cmd}\n{e}\n'))
 
         self.connector.close_connection()
+
+        return fetched, columns
 
     def _table_columns(
             self,
