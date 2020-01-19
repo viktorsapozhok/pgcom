@@ -10,14 +10,8 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-import os
-import sys
-
-autodoc_mock_imports = ['numpy']
-sys.path.insert(0, os.path.abspath('../..'))
-
+import pkg_resources
 import sphinx_rtd_theme
-from pgcom.version import __version__
 
 # -- Project information -----------------------------------------------------
 
@@ -26,8 +20,8 @@ copyright = '2020, viktorsapozhok'
 author = 'viktorsapozhok'
 user = 'viktorsapozhok'
 
-version = __version__
-release = __version__
+version = pkg_resources.get_distribution('pgcom').version
+release = version
 
 # The default language to highlight source code in.
 highlight_language = 'python'
