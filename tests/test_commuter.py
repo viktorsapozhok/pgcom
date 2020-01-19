@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -101,6 +102,25 @@ def test_select_insert():
     delete_table(table_name='test_table')
 
 
+@patch('pgcom.commuter._available', False)
+def test_select_with_missing_alchemy():
+    from pgcom import Commuter
+
+    _commuter = Commuter(**conn_params)
+    assert _commuter.connector.engine is None
+
+    delete_table(table_name='test_table')
+    _commuter.execute(create_test_table())
+    _commuter.insert('test_table', create_test_data())
+    df = _commuter.select('select * from test_table')
+    df['date'] = pd.to_datetime(df['var_1'])
+
+    assert df['date'][0].date() == datetime.now().date()
+    assert len(df) == 3
+
+    delete_table(table_name='test_table')
+
+
 def test_multiple_select():
     delete_table(table_name='test_table')
     commuter.execute(create_test_table())
@@ -141,6 +161,9 @@ def test_select_one():
     cmd = 'SELECT MAX(var_2) FROM test_table WHERE var_2 > 10'
     value = commuter.select_one(cmd=cmd, default=-1)
     assert value == -1
+
+    value = commuter.select_one('DROP TABLE test_table', default=1)
+    assert value == 1
 
     delete_table(table_name='test_table')
 
@@ -378,6 +401,9 @@ def test_insert_row_return():
         assert False
     except exc.QueryExecutionError:
         assert True
+
+    sid = commuter.insert_return('DROP TABLE model.test_table')
+    assert sid == 0
 
     delete_table(table_name='test_table', schema='model')
 

@@ -436,8 +436,13 @@ class Commuter:
 
                 conn.commit()
             except Exception as e:
-                conn.rollback()
-                raise exc.CopyError(e)
+                try:
+                    conn.rollback()
+                except Exception as ex:
+                    exc.raise_with_traceback(
+                        exc.CopyError(f'{ex}\n unable to rollback'))
+
+                exc.raise_with_traceback(exc.CopyError(f'{e}\n'))
 
         self.connector.close_connection()
 
@@ -493,7 +498,6 @@ class Commuter:
             pd.DataFrame without primary key conflicts.
         """
 
-        # extract names of the primary key columns
         p_key = self._primary_key(table_name, schema)
         p_key = p_key['column_name'].to_list()
 
