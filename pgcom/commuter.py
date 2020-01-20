@@ -392,6 +392,7 @@ class Commuter:
             table_name: str,
             data: pd.DataFrame,
             schema: str = 'public',
+            columns: Optional[List[str]] = None,
             format_data: bool = False,
             where: Optional[str] = None
     ) -> None:
@@ -404,6 +405,8 @@ class Commuter:
                 DataFrame from where to insert.
             schema:
                 Name of the schema.
+            columns:
+                
             format_data:
                 Reorder columns and adjust dtypes wrt to table metadata
                 from information_schema.
@@ -429,7 +432,12 @@ class Commuter:
                     data.to_csv(s_buf, index=False, header=False)
                     s_buf.seek(0)
 
-                    cur.copy_from(s_buf, table_name, sep=',', null='')
+                    cur.copy_from(
+                        file=s_buf,
+                        table=table_name,
+                        sep=',',
+                        null='',
+                        columns=columns)
 
                 conn.commit()
             except Exception as e:
@@ -764,6 +772,9 @@ class Commuter:
         # adjust dtypes of DataFrame columns
         for row in table_columns.itertuples():
             column = row.column_name
+
+            if column not in data.columns:
+                continue
 
             if row.data_type in ['smallint', 'integer', 'bigint']:
                 if data[column].dtype == np.float:

@@ -255,6 +255,13 @@ the :func:`~pgcom.commuter.Commuter.resolve_primary_conflicts` method can be use
 to control the data integrity and, instead of removing rows from the table,
 remove it from the DataFrame.
 
+.. code-block:: python
+
+    df = commuter.resolve_primary_conflicts(
+        table_name='table_name',
+        data=df,
+        where='condition to reduce search complexity')
+
 To implement it, the method selects data from the table and removes all
 rows from the given DataFrame, which violate primary key constraint
 in the selected data. To reduce the amount of querying data (when table is large),
@@ -326,3 +333,39 @@ which violate foreign key constraint in the selected data.
         data=df,
         where='condition to reduce the selected data')
 
+Let's say we have table named ``authors`` that stores meta-information about writers,
+and table ``novels`` with a foreign key constraint that references to ``authors`` table.
+
+commuter.execute(f"""CREATE TABLE authors (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR (255),
+    born INTEGER,
+    died INTEGER);""")
+
+commuter.execute(f"""CREATE TABLE novels (
+    novel_id SERIAL PRIMARY KEY,
+    author_id INTEGER REFERENCES authors(id),
+    author_name VARCHAR (255),
+    novel_name VARCHAR (255));""")
+
+Assume, that we have added some data to ``authors``.
+
+>>> print(commuter.select('select * from authors'))
+   id        name  born  died
+0   1     Tolstoy  1828  1910
+1   2  Dostoevsky  1821  1881
+2   3     Chekhov  1860  1904
+>>>
+
+We get an error, if we try to add data from DataFrame contained foreign key conflicts.
+
+df = pd.DataFrame({
+    'author_id': [1, 1, 4],
+    'author_name': ['Tolstoy', 'Tolstoy', 'Nabokov'],
+    'novel_name': ['War and Peace', 'Anna Karenina', 'Lolita']})
+
+>>> print(df)
+   author_id author_name     novel_name
+0          1     Tolstoy  War and Peace
+1          1     Tolstoy  Anna Karenina
+2          4     Nabokov         Lolita
