@@ -4,9 +4,9 @@ ChangeLog
 0.1.4 (2019-01-21)
 ------------------
 
-* Changed ``where`` argument type in `:func:`~pgcom.commuter.Commuter.resolve_primary_conflicts`
+* Changed ``where`` argument type in `:func:~pgcom.commuter.Commuter.resolve_primary_conflicts`
 from positional to optional
-* Changed ``where`` argument type in `:func:`~pgcom.commuter.Commuter.resolve_foreign_conflicts`
+* Changed ``where`` argument type in `:func:~pgcom.commuter.Commuter.resolve_foreign_conflicts`
 from positional to optional
 * Fixed bug in copying from DataFrame with incomplete set of columns
 (`#3 <https://github.com/viktorsapozhok/pgcom/issues/3>`_)
