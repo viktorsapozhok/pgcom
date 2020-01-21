@@ -27,9 +27,9 @@ $ pip install git+https://github.com/viktorsapozhok/pgcom.git
 ## Key features
 
 * Execution of the database operations, reading query into a DataFrame, 
-writing records from DataFrame to the table
-* Using `COPY FROM` for efficient adding data to the table
-* Methods to resolve primary and foreign key conflicts before adding data to the table
+inserting records from DataFrame to the table
+* Using `COPY FROM` for efficient writing data to the table
+* Methods to resolve primary and foreign key conflicts before writing to the table
 * Tools for setting asynchronous communication with database using 
 PostgreSQL `LISTEN` and `NOTIFY` commands        
 
