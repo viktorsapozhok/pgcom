@@ -239,6 +239,21 @@ def test_copy_from_schema():
     delete_table(table_name='test_table', schema='model')
 
 
+def test_copy_from_incomplete_data():
+    delete_table(table_name='test_table', schema='model')
+    commuter.execute(create_test_table_serial())
+    df = pd.DataFrame({'var_2': [1, 2, 3], 'var_3': ['x', 'y', 'z']})
+    commuter.copy_from(
+        table_name='model.test_table',
+        data=df,
+        format_data=True)
+
+    assert commuter.select_one(
+        'select count(*) from model.test_table') == 3
+
+    delete_table(table_name='test_table', schema='model')
+
+
 def test_execute_with_params():
     delete_table(table_name='people')
     who = "Yeltsin"

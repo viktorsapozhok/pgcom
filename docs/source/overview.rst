@@ -333,39 +333,64 @@ which violate foreign key constraint in the selected data.
         data=df,
         where='condition to reduce the selected data')
 
-Let's say we have table named ``authors`` that stores meta-information about writers,
+Let's say, we have table named ``authors`` that stores meta-information about writers,
 and table ``novels`` with a foreign key constraint that references to ``authors`` table.
 
-commuter.execute(f"""CREATE TABLE authors (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR (255),
-    born INTEGER,
-    died INTEGER);""")
+.. code-block:: python
 
-commuter.execute(f"""CREATE TABLE novels (
-    novel_id SERIAL PRIMARY KEY,
-    author_id INTEGER REFERENCES authors(id),
-    author_name VARCHAR (255),
-    novel_name VARCHAR (255));""")
+    commuter.execute(f"""CREATE TABLE authors (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR (255),
+        born INTEGER,
+        died INTEGER);""")
 
-Assume, that we have added some data to ``authors``.
+    commuter.execute(f"""CREATE TABLE novels (
+        novel_id SERIAL PRIMARY KEY,
+        author_id INTEGER REFERENCES authors(id),
+        author_name VARCHAR (255),
+        novel VARCHAR (255));""")
 
->>> print(commuter.select('select * from authors'))
-   id        name  born  died
-0   1     Tolstoy  1828  1910
-1   2  Dostoevsky  1821  1881
-2   3     Chekhov  1860  1904
->>>
+Assume now, that we have added some data to ``authors``.
 
-We get an error, if we try to add data from DataFrame contained foreign key conflicts.
+.. code-block:: bash
 
-df = pd.DataFrame({
-    'author_id': [1, 1, 4],
-    'author_name': ['Tolstoy', 'Tolstoy', 'Nabokov'],
-    'novel_name': ['War and Peace', 'Anna Karenina', 'Lolita']})
+    >>> print(commuter.select('select * from authors'))
+       id        name  born  died
+    0   1     Tolstoy  1828  1910
+    1   2  Dostoevsky  1821  1881
+    2   3     Chekhov  1860  1904
 
->>> print(df)
-   author_id author_name     novel_name
-0          1     Tolstoy  War and Peace
-1          1     Tolstoy  Anna Karenina
-2          4     Nabokov         Lolita
+We get an error, if we try to write from the DataFrame with unresolved foreign
+key conflicts.
+
+.. code-block:: bash
+
+    >>> df = pd.DataFrame({
+    ...     'author_id': [1, 1, 4],
+    ...     'author_name': ['Tolstoy', 'Tolstoy', 'Nabokov'],
+    ...     'novel': ['War and Peace', 'Anna Karenina', 'Lolita']})
+    >>>
+    >>> print(df)
+       author_id author_name     novel_name
+    0          1     Tolstoy  War and Peace
+    1          1     Tolstoy  Anna Karenina
+    2          4     Nabokov         Lolita
+    >>>
+    >>> commuter.copy_from(table_name='novels', data=df, format_data=True)
+    pgcom.exc.CopyError: insert or update on table "novels" violates foreign key
+    constraint "novels_author_id_fkey"
+    DETAIL:  Key (author_id)=(4) is not present in table "authors".
+
+Let's sanitize the DataFrame and try again.
+
+    >>> df = commuter.resolve_foreign_conflicts(
+    ...     table_name='novels', parent_name='authors', data=df)
+    >>>
+    >>> commuter.copy_from(table_name='novels', data=df, format_data=True)
+    >>>
+    >>> print(commuter.select('select * from novels'))
+       novel_id  author_id author_name          novel
+    0         1          1     Tolstoy  War and Peace
+    1         2          1     Tolstoy  Anna Karenina
+
+Success!
