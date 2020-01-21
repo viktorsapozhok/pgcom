@@ -31,7 +31,8 @@ def foreign_key(
         table_name: str,
         schema: str,
         parent_name: str,
-        parent_schema: str) -> str:
+        parent_schema: str
+) -> str:
     """Return column names (child and parent) of the foreign key.
     """
 

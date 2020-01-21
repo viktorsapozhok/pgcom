@@ -413,8 +413,10 @@ class Commuter:
                 DELETE command is not executed if not specified.
         """
 
+        df = data.copy()
+
         if format_data:
-            data = self._format_data(data, table_name, schema)
+            df = self._format_data(df, table_name, schema)
 
         table_name = self._table_name(table_name, schema)
 
@@ -426,10 +428,15 @@ class Commuter:
 
                     # DataFrame to buffer
                     s_buf = StringIO()
-                    data.to_csv(s_buf, index=False, header=False)
+                    df.to_csv(s_buf, index=False, header=False)
                     s_buf.seek(0)
 
-                    cur.copy_from(s_buf, table_name, sep=',', null='')
+                    cur.copy_from(
+                        file=s_buf,
+                        table=table_name,
+                        sep=',',
+                        null='',
+                        columns=df.columns)
 
                 conn.commit()
             except Exception as e:
@@ -468,8 +475,8 @@ class Commuter:
             self,
             table_name: str,
             data: pd.DataFrame,
-            where: str,
-            schema: str = 'public'
+            schema: str = 'public',
+            where: Optional[str] = None
     ) -> pd.DataFrame:
         """Resolve primary key conflicts in DataFrame.
 
@@ -485,11 +492,11 @@ class Commuter:
                 Name of the table.
             data:
                 DataFrame with primary key conflicts.
+            schema:
+                Name of the schema.
             where:
                 User defined `WHERE` clause used when selecting
                 data from `table_name`.
-            schema:
-                Name of the schema.
 
         Returns:
             pd.DataFrame without primary key conflicts.
@@ -503,7 +510,10 @@ class Commuter:
         if len(p_key) > 0:
             table_name = self._table_name(table_name, schema)
 
-            cmd = f"SELECT * FROM {table_name} WHERE {where}"
+            cmd = 'SELECT * FROM ' + table_name
+            if where is not None:
+                cmd += ' WHERE ' + where
+
             table_data = self.select(cmd)
 
             if not table_data.empty:
@@ -524,8 +534,8 @@ class Commuter:
             table_name: str,
             parent_name: str,
             data: pd.DataFrame,
-            where: str,
             schema: str = 'public',
+            where: Optional[str] = None,
             parent_schema: Optional[str] = None
     ) -> pd.DataFrame:
         """Resolve foreign key conflicts in DataFrame.
@@ -544,11 +554,11 @@ class Commuter:
                 Name of the parent table.
             data:
                 DataFrame with foreign key conflicts.
+            schema:
+                Name of the child table schema.
             where:
                 User defined `WHERE` clause used when selecting
                 data from `table_name`.
-            schema:
-                Name of the child table schema.
             parent_schema:
                 Name of the parent table schema.
 
@@ -568,7 +578,10 @@ class Commuter:
         if len(foreign_key) > 0:
             parent_table = self._table_name(parent_name, parent_schema)
 
-            cmd = f"SELECT * FROM {parent_table} WHERE {where}"
+            cmd = 'SELECT * FROM ' + parent_table
+            if where is not None:
+                cmd += ' WHERE ' + where
+
             parent_data = self.select(cmd)
 
             if not parent_data.empty:
@@ -758,21 +771,24 @@ class Commuter:
         """Formatting DataFrame before applying copy_from.
         """
 
-        # select column attributes
+        # names of the table columns from information schema
         table_columns = self._table_columns(table_name, schema)
+
+        # intersection of DataFrame and table columns
+        columns = []  # type: List[str]
 
         # adjust dtypes of DataFrame columns
         for row in table_columns.itertuples():
             column = row.column_name
 
-            if row.data_type in ['smallint', 'integer', 'bigint']:
-                if data[column].dtype == np.float:
-                    data[column] = data[column].astype(int)
+            if column in data.columns:
+                columns += [column]
 
-        # set columns order according to ordinal position
-        data = data[table_columns['column_name'].to_list()]
+                if row.data_type in ['smallint', 'integer', 'bigint']:
+                    if data[column].dtype == np.float:
+                        data[column] = data[column].astype(int)
 
-        return data
+        return data[columns]
 
     @staticmethod
     def _table_name(

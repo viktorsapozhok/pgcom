@@ -20,10 +20,10 @@ pygments_style = 'sphinx'
 
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon',  # Support for NumPy and Google style docstrings
-    'sphinx.ext.viewcode',  # Add links to highlighted source code
-    'sphinx.ext.mathjax',  # Render math via JavaScript
-    'sphinx_autodoc_typehints',  # Moves type hints from signature to docs
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode',
+    'sphinx.ext.mathjax',
+    'sphinx_autodoc_typehints',
 ]
 
 templates_path = ['_templates']
