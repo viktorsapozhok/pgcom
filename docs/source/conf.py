@@ -15,7 +15,6 @@ version = __version__
 release = __version__
 
 highlight_language = 'python'
-
 pygments_style = 'sphinx'
 
 extensions = [
@@ -27,19 +26,12 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-
 source_suffix = '.rst'
-
 master_doc = 'index'
-
 language = None
-
 exclude_patterns = []
-
 autodoc_inherit_docstrings = False
-
 add_module_names = False
-
 html_theme = 'sphinx_rtd_theme'
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
