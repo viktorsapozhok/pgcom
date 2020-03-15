@@ -786,7 +786,7 @@ class Commuter:
 
                 if row.data_type in ['smallint', 'integer', 'bigint']:
                     if data[column].dtype == np.float:
-                        data[column] = data[column].astype(int)
+                        data[column] = data[column].round().astype('Int64')
 
         return data[columns]
 

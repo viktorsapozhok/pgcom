@@ -1,6 +1,7 @@
 from datetime import datetime
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 
 from pgcom import Commuter, exc
@@ -212,7 +213,7 @@ def test_copy_from_schema():
     df['new_var_1'] = 1
     df.insert(loc=0, column='new_var_2', value=[3, 2, 1])
 
-    assert df.shape == (3, 6)
+    assert df.shape == (3, 7)
 
     commuter.copy_from(
         table_name='test_table',
@@ -252,6 +253,23 @@ def test_copy_from_incomplete_data():
         'select count(*) from model.test_table') == 3
 
     delete_table(table_name='test_table', schema='model')
+
+
+def test_format_data():
+    delete_table(table_name='test_table')
+    commuter.execute(create_test_table())
+    df = create_test_data()
+    df['var_5'] = [np.nan, np.nan, 1]
+
+    commuter.copy_from(
+        table_name='test_table',
+        data=df,
+        format_data=True)
+
+    assert commuter.select_one(
+        'select count(*) from test_table') == 3
+
+    delete_table(table_name='test_table')
 
 
 def test_execute_with_params():
@@ -436,7 +454,8 @@ def create_test_table(schema=None):
         var_1 timestamp,
         var_2 integer NOT NULL PRIMARY KEY,
         var_3 text,
-        var_4 real);
+        var_4 real,
+        var_5 integer);
     """
 
 
@@ -445,7 +464,8 @@ def create_test_data():
         'var_1': pd.date_range(datetime.now(), periods=3),
         'var_2': [1, 2, 3],
         'var_3': ['x', 'xx', 'xxx'],
-        'var_4': [1.1, 2.2, 3.3]})
+        'var_4': [1.1, 2.2, 3.3],
+        'var_5': [1, 2, 3]})
 
 
 def create_test_table_serial():

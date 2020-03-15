@@ -1,6 +1,11 @@
 ChangeLog
 =========
 
+0.1.5 (2019-03-16)
+------------------
+
+* Fixed data formatting on integer columns with missed values (`#5 <https://github.com/viktorsapozhok/pgcom/issues/5>`_)
+
 0.1.4 (2019-01-21)
 ------------------
 
