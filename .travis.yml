@@ -1,33 +1,24 @@
 branches:
   only:
     - master
+
 language: python
 python:
-  - 3.6
   - 3.7
+
 services:
-  - postgresql
-addons:
-  postgresql: '11'
-before_install:
-  - python --version
-  - pip install -U pip
-  - pip install -U pytest
-  - pip install -U pytest-cov
-  - pip install -U codecov
-  - sudo apt-get update
-  - sudo apt-get --yes remove postgresql\*
-  - sudo apt-get install -y postgresql-11 postgresql-client-11
-  - sudo cp /etc/postgresql/{9.6,11}/main/pg_hba.conf
-  - sudo service postgresql restart 11
+  - docker
+
 install:
-  - pip install .
-before_script:
-  - psql --version
-  - psql -c "CREATE DATABASE test_db;" -U postgres -p 5433
-  - psql -c "CREATE SCHEMA model;" -U postgres -d test_db -p 5433
-  - psql -c "CREATE ROLE pguser LOGIN SUPERUSER PASSWORD 'password';" -U postgres -p 5433
+  - make -C docker/ build
+
 script:
-  - pytest --cov=pgcom --cov-report=term-missing -vv -s
+  - docker ps | grep pgcom
+  - make -C docker/ test
+
+after_script:
+  - make -C docker/ clean
+  - make -C docker/ prune
+
 after_success:
   - codecov

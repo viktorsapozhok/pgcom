@@ -1,0 +1,21 @@
+version: '3.4'
+
+services:
+  pgcom:
+    image: pgcom
+    container_name: pgcom
+    user: user
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    environment:
+      - PGPASSWORD=postgres
+    command: ["tail", "-f", "/dev/null"]
+  postgresql:
+    image: postgres:12
+    container_name: pgcom
+    environment:
+      - POSTGRES_HOST=pgcom
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PORT=5432
