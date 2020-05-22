@@ -277,7 +277,7 @@ def test_execute_with_params():
     who = "Yeltsin"
     age = 72
 
-    cmd = f"""
+    cmd = """
     CREATE TABLE IF NOT EXISTS people(
         name text,
         age integer)
@@ -417,7 +417,7 @@ def test_insert_row_return():
     assert len(df) == 1
     assert df['var_1'][0] == datetime(2019, 12, 9)
 
-    cmd = f"""
+    cmd = """
     INSERT INTO model.test_table (var_1, var_2, var_3)
         VALUES (%s, %s, %s)
     """
@@ -430,7 +430,7 @@ def test_insert_row_return():
 
     try:
         _ = commuter.insert_return(
-            cmd=f'insert into model.test_table VALUES (%s,%s)',
+            cmd='insert into model.test_table VALUES (%s,%s)',
             values=(1, 1),
             return_id='id')
         assert False
@@ -469,7 +469,7 @@ def create_test_data():
 
 
 def create_test_table_serial():
-    return f"""
+    return """
     CREATE TABLE IF NOT EXISTS model.test_table (
         id SERIAL PRIMARY KEY,
         var_1 timestamp,
@@ -495,5 +495,4 @@ def delete_table(table_name, schema=None):
             cmd = 'drop table ' + table_name + ' CASCADE'
         else:
             cmd = 'drop table ' + schema + '.' + table_name + ' CASCADE'
-
         commuter.execute(cmd)

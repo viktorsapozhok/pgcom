@@ -467,7 +467,7 @@ class Commuter:
         """
 
         return self.select_one(
-            cmd=f'SELECT SUM(numbackends) FROM pg_stat_database',
+            cmd='SELECT SUM(numbackends) FROM pg_stat_database',
             default=0)
 
     @fix_schema
