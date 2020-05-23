@@ -22,7 +22,6 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.viewcode',
     'sphinx.ext.mathjax',
-    'sphinx_autodoc_typehints',
 ]
 
 templates_path = ['_templates']
@@ -43,4 +42,4 @@ html_context = {
     'conf_py_path': '/docs/source/',
 }
 
-html_static_path = ['_static']
+html_static_path = []

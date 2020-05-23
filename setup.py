@@ -37,7 +37,7 @@ setup(
     ],
     extras_require={
         'sql': ['sqlalchemy>=1.3.12'],
-        'test': ['pytest', 'tox'],
+        'test': ['codecov', 'tox'],
         'docs': ['sphinx', 'sphinx_rtd_theme', 'sphinx-autodoc-typehints']
     },
     python_requires='>=3.6',
