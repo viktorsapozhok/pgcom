@@ -1,7 +1,7 @@
 .. module:: pgcom.exc
 
-Commuter
-========
+exc
+===
 
 .. autoclass:: QueryExecutionError
    :members:

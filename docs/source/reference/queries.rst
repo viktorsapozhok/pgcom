@@ -1,6 +1,6 @@
 .. module:: pgcom.queries
 
-Queries
+queries
 =======
 
 .. autofunction:: primary_key
