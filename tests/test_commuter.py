@@ -272,6 +272,23 @@ def test_format_data():
     delete_table(table_name='test_table')
 
 
+def test_format_text_columns():
+    delete_table(table_name='test_table')
+    commuter.execute(create_test_table())
+    df = create_test_data()
+    df['var_3'] = ['abc', 'abc.abc', 'abc,abc']
+
+    commuter.copy_from(
+        table_name='test_table',
+        data=df,
+        format_data=True)
+
+    df = commuter.select('select * from test_table')
+    assert df['var_3'].to_list() == ['abc', 'abc.abc', 'abcabc']
+
+    delete_table(table_name='test_table')
+
+
 def test_execute_with_params():
     delete_table(table_name='people')
     who = "Yeltsin"

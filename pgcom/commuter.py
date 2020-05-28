@@ -787,6 +787,8 @@ class Commuter:
                 if row.data_type in ['smallint', 'integer', 'bigint']:
                     if data[column].dtype == np.float:
                         data[column] = data[column].round().astype('Int64')
+                elif row.data_type in ['text']:
+                    data[column] = data[column].str.replace(',', '')
 
         return data[columns]
 
