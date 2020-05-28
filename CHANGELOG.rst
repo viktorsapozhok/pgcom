@@ -1,7 +1,7 @@
 ChangeLog
 =========
 
-0.1.6 (2020-03-17)
+0.1.6 (2020-05-28)
 ------------------
 
 * Updated :func:`~pgcom.commuter.Commuter._format_data` to fix text fields with comma
