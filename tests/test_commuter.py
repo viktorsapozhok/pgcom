@@ -282,9 +282,18 @@ def test_format_text_columns():
         table_name='test_table',
         data=df,
         format_data=True)
-
     df = commuter.select('select * from test_table')
     assert df['var_3'].to_list() == ['abc', 'abc.abc', 'abcabc']
+
+    commuter.execute('delete from test_table where 1=1')
+
+    df['var_3'] = [np.nan, np.nan, np.nan]
+    commuter.copy_from(
+        table_name='test_table',
+        data=df,
+        format_data=True)
+    df = commuter.select('select * from test_table')
+    assert df['var_3'].to_list() == [None, None, None]
 
     delete_table(table_name='test_table')
 

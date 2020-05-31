@@ -1,6 +1,11 @@
 ChangeLog
 =========
 
+0.1.7 (2020-05-31)
+------------------
+
+* Fixed `#9 <https://github.com/viktorsapozhok/pgcom/issues/9>`_
+
 0.1.6 (2020-05-28)
 ------------------
 
