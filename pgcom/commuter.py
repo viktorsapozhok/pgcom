@@ -788,8 +788,10 @@ class Commuter:
                     if data[column].dtype == np.float:
                         data[column] = data[column].round().astype('Int64')
                 elif row.data_type in ['text']:
-                    data[column] = data[column].str.replace(',', '')
-
+                    try:
+                        data[column] = data[column].str.replace(',', '')
+                    except AttributeError:
+                        continue
         return data[columns]
 
     @staticmethod
