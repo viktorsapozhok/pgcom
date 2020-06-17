@@ -423,6 +423,13 @@ def test_insert_row():
     delete_table(table_name='test_table', schema='model')
 
 
+def test_insert_string_with_quotes():
+    commuter.execute(create_test_table())
+    commuter.insert_row(
+        table_name='test_table', var_2=1, var_3="test 'message'")
+    delete_table(table_name='test_table')
+
+
 def test_insert_row_return():
     delete_table(table_name='test_table', schema='model')
 
