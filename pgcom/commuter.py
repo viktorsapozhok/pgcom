@@ -64,7 +64,7 @@ def fix_schema(func: Callable) -> Callable:
     return wrapped
 
 
-class Connector:
+class Connector():
     """Setting a connection with database.
 
     Besides the basic connection parameters any other
@@ -82,12 +82,16 @@ class Connector:
             User password.
         db_name:
             The database name.
+        pre_ping:
+            ToDo
         pool_size:
             ToDo
         schema:
             If schema is specified,
             then setting a connection to the schema only.
     """
+
+    _pool: pool.SimpleConnectionPool
 
     def __init__(
             self,
@@ -96,7 +100,8 @@ class Connector:
             user: str,
             password: str,
             db_name: str,
-            pool_size: Optional[int] = None,
+            pool_size: int = 20,
+            pre_ping: bool = False,
             schema: Optional[str] = None,
             **kwargs: Any
     ) -> None:
@@ -105,16 +110,15 @@ class Connector:
         self.user = user
         self.password = password
         self.db_name = db_name
+        self.pool_size = pool_size
+        self.pre_ping = pre_ping
         self.schema = schema
         self._kwargs = kwargs
-
-        self._pool = None
 
         if self.schema is not None:
             self._kwargs['options'] = f'--search_path={self.schema}'
 
-        if pool_size is not None:
-            self._pool = self.make_pool(max_conn=pool_size)
+        self._pool = self.make_pool()
 
     def __del__(self) -> None:
         self.close_all()
@@ -132,47 +136,41 @@ class Connector:
         """ToDo
         """
 
-        if self._pool is None:
-            return True
-        else:
-            return self._pool.closed
+        return self._pool.closed
 
     @contextmanager
     def open_connection(self) -> Iterator[psycopg2.connect]:
         """ToDo
         """
 
-        if not self.closed:
-            conn = self._pool.getconn()
-        else:
-            conn = self.make_connection()
+        conn = self._pool.getconn()
+
+        if self.pre_ping:
+            if not self.ping(conn):
+                self._pool = self.restart_pool()
+                conn = self._pool.getconn()
 
         try:
             yield conn
         finally:
-            if not self.closed:
-                self._pool.putconn(conn)
-            else:
-                conn.close()
+            self._pool.putconn(conn)
 
-    def make_pool(self, max_conn: int) -> pool.SimpleConnectionPool:
+    def make_pool(self) -> pool.SimpleConnectionPool:
         """ToDO
         """
 
         return pool.SimpleConnectionPool(
-            minconn=1, maxconn=max_conn,
+            minconn=1, maxconn=self.pool_size,
             user=self.user, password=self.password,
             host=self.host, port=self.port, dbname=self.db_name,
             **self._kwargs)
 
-    def make_connection(self) -> psycopg2.connect:
-        """Setting `psycopg2` connection.
+    def restart_pool(self) -> pool.SimpleConnectionPool:
+        """ToDo
         """
 
-        return psycopg2.connect(
-            user=self.user, password=self.password,
-            host=self.host, port=self.port, dbname=self.db_name,
-            **self._kwargs)
+        self.close_all()
+        return self.make_pool()
 
     def close_all(self) -> None:
         """ToDo
@@ -182,7 +180,7 @@ class Connector:
             self._pool.closeall()
 
     @staticmethod
-    def ping(conn) -> bool:
+    def ping(conn: psycopg2.connect) -> bool:
         """ToDo
         """
 
@@ -212,16 +210,18 @@ class Commuter:
             User password.
         db_name:
             The database name.
-        pre_ping:
-            ToDo
 
     Keyword Args:
+        pre_ping:
+            ToDo
         pool_size:
             ToDo
         schema:
             If schema is specified,
             then setting a connection to the schema only.
     """
+
+    connector: Connector
 
     def __init__(
             self,
@@ -230,10 +230,8 @@ class Commuter:
             user: str,
             password: str,
             db_name: str,
-            pre_ping: bool = False,
             **kwargs: Any
     ) -> None:
-        self.pre_ping = pre_ping
         self.connector = Connector(
             host, port, user, password, db_name, **kwargs)
 
