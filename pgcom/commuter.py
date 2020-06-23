@@ -3,7 +3,6 @@ __all__ = [
     'Commuter'
 ]
 
-from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime
 from functools import wraps
@@ -11,7 +10,6 @@ from io import StringIO
 from typing import (
     Any,
     Callable,
-    Dict,
     Iterator,
     List,
     Optional,
@@ -23,14 +21,8 @@ from typing import (
 import numpy as np
 import pandas as pd
 import psycopg2
+from psycopg2 import pool
 from psycopg2.extras import execute_batch
-
-try:
-    from sqlalchemy import create_engine
-    from sqlalchemy.engine.url import URL
-    _available = True
-except ImportError:
-    _available = False
 
 from . import exc, queries
 
@@ -90,8 +82,8 @@ class Connector:
             User password.
         db_name:
             The database name.
-
-    Keyword args:
+        pool_size:
+            ToDo
         schema:
             If schema is specified,
             then setting a connection to the schema only.
@@ -104,83 +96,106 @@ class Connector:
             user: str,
             password: str,
             db_name: str,
-            **kwargs: str
+            pool_size: Optional[int] = None,
+            schema: Optional[str] = None,
+            **kwargs: Any
     ) -> None:
         self.host = host
         self.port = port
         self.user = user
         self.password = password
         self.db_name = db_name
-        self.schema = kwargs.get('schema', None)
+        self.schema = schema
+        self._kwargs = kwargs
 
-        self.conn_params = defaultdict()  # type: Dict[str, Any]
+        self._pool = None
 
-        for key in kwargs.keys():
-            if key not in ['schema']:
-                self.conn_params[key] = kwargs.get(key)
+        if self.schema is not None:
+            self._kwargs['options'] = f'--search_path={self.schema}'
 
-        self.conn = None
-        self.engine = None
-
-        if _available:
-            self._make_engine()
+        if pool_size is not None:
+            self._pool = self.make_pool(max_conn=pool_size)
 
     def __del__(self) -> None:
-        self.close_connection()
+        self.close_all()
 
     def __repr__(self) -> str:
         schema = 'public' if self.schema is None else self.schema
         return f'(' \
                f'host={self.host}, ' \
                f'user={self.user}, ' \
-               f'db_name={self.db_name}, ' \
+               f'dbname={self.db_name}, ' \
                f'schema={schema})'
+
+    @property
+    def closed(self) -> bool:
+        """ToDo
+        """
+
+        if self._pool is None:
+            return True
+        else:
+            return self._pool.closed
 
     @contextmanager
     def open_connection(self) -> Iterator[psycopg2.connect]:
-        if self.conn is None:
-            self._set_connection()
+        """ToDo
+        """
 
-        yield self.conn
+        if not self.closed:
+            conn = self._pool.getconn()
+        else:
+            conn = self.make_connection()
 
-        self.close_connection()
+        try:
+            yield conn
+        finally:
+            if not self.closed:
+                self._pool.putconn(conn)
+            else:
+                conn.close()
 
-    def close_connection(self) -> None:
-        if self.conn is not None:
-            self.conn.close()
-            self.conn = None
+    def make_pool(self, max_conn: int) -> pool.SimpleConnectionPool:
+        """ToDO
+        """
 
-    def _set_connection(self) -> None:
+        return pool.SimpleConnectionPool(
+            minconn=1, maxconn=max_conn,
+            user=self.user, password=self.password,
+            host=self.host, port=self.port, dbname=self.db_name,
+            **self._kwargs)
+
+    def make_connection(self) -> psycopg2.connect:
         """Setting `psycopg2` connection.
         """
 
-        conn_params = self.conn_params
-        conn_params['host'] = self.host
-        conn_params['port'] = self.port
-        conn_params['user'] = self.user
-        conn_params['password'] = self.password
-        conn_params['dbname'] = self.db_name
+        return psycopg2.connect(
+            user=self.user, password=self.password,
+            host=self.host, port=self.port, dbname=self.db_name,
+            **self._kwargs)
 
-        if self.schema is not None:
-            conn_params['options'] = f'--search_path={self.schema}'
+    def close_all(self) -> None:
+        """ToDo
+        """
 
-        self.conn = psycopg2.connect(**conn_params)
+        if not self.closed:
+            self._pool.closeall()
 
-    def _make_engine(self) -> None:
-        conn_url = URL(
-            drivername='postgresql',
-            username=self.user,
-            password=self.password,
-            host=self.host,
-            port=self.port,
-            database=self.db_name)
+    @staticmethod
+    def ping(conn) -> bool:
+        """ToDo
+        """
 
-        connect_args = self.conn_params
-
-        if self.schema is not None:
-            connect_args['options'] = '-csearch_path=' + self.schema
-
-        self.engine = create_engine(conn_url, connect_args=connect_args)
+        sta = False
+        with conn.cursor() as cur:
+            cur.execute('SELECT 1')
+            if cur.description is not None:
+                fetched = cur.fetchall()
+                try:
+                    sta = fetched[0][0] == 1
+                except IndexError:
+                    pass
+        return sta
 
 
 class Commuter:
@@ -197,8 +212,12 @@ class Commuter:
             User password.
         db_name:
             The database name.
+        pre_ping:
+            ToDo
 
-    Keyword args:
+    Keyword Args:
+        pool_size:
+            ToDo
         schema:
             If schema is specified,
             then setting a connection to the schema only.
@@ -211,8 +230,10 @@ class Commuter:
             user: str,
             password: str,
             db_name: str,
-            **kwargs: str
+            pre_ping: bool = False,
+            **kwargs: Any
     ) -> None:
+        self.pre_ping = pre_ping
         self.connector = Connector(
             host, port, user, password, db_name, **kwargs)
 
@@ -230,13 +251,8 @@ class Commuter:
             Pandas.DataFrame.
         """
 
-        if self.connector.engine is not None:
-            with self.connector.engine.connect() as conn:
-                df = pd.read_sql_query(cmd, conn)
-        else:
-            records, columns = self._execute(cmd)
-            df = pd.DataFrame.from_records(records, columns=columns)
-
+        records, columns = self._execute(cmd)
+        df = pd.DataFrame.from_records(records, columns=columns)
         return df
 
     def select_one(
@@ -448,8 +464,6 @@ class Commuter:
 
                 exc.raise_with_traceback(exc.CopyError(f'{e}\n'))
 
-        self.connector.close_connection()
-
     @fix_schema
     def is_table_exist(
             self,
@@ -659,8 +673,6 @@ class Commuter:
                 exc.raise_with_traceback(
                     exc.QueryExecutionError(
                         f'Execution failed on sql: {cmd}\n{e}\n'))
-
-        self.connector.close_connection()
 
         return fetched, columns
 

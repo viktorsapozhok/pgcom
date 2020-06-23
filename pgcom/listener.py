@@ -97,8 +97,6 @@ class Listener(Commuter):
                     else:
                         self._callback(on_error, e)
 
-        self.connector.close_connection()
-
     def create_notify_function(
             self,
             func_name: str,

@@ -1,4 +1,5 @@
 from datetime import datetime
+from functools import wraps
 from unittest.mock import patch
 
 import numpy as np
@@ -17,48 +18,38 @@ def test_connection():
 
 def test_connection_keywords():
     _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
-
     with _commuter.connector.open_connection() as conn:
         assert conn is not None
+    del _commuter
 
 
 def test_multiple_connection():
     n_conn = commuter.get_connections_count()
-
     assert n_conn > 0
 
     for i in range(100):
         with commuter.connector.open_connection() as conn:
             assert conn is not None
-
     assert commuter.get_connections_count() - n_conn < 10
 
 
-def test_engine():
-    if commuter.connector.engine is not None:
-        with commuter.connector.engine.connect() as conn:
-            assert conn.connection.is_valid
+def test_pool_connection():
+    _commuter = Commuter(**conn_params, pool_size=20)
+    with _commuter.connector.open_connection() as conn:
+        assert conn is not None
+    del _commuter
 
 
-def test_engine_keywords():
-    if commuter.connector.engine is not None:
-        _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
+def test_multiple_pool_connection():
+    _commuter = Commuter(**conn_params, pool_size=20)
+    n_conn = _commuter.get_connections_count()
+    assert n_conn > 0
 
-        with _commuter.connector.engine.connect() as conn:
-            assert conn.connection.is_valid
-
-
-def test_multiple_engine():
-    if commuter.connector.engine is not None:
-        n_conn = commuter.get_connections_count()
-
-        assert n_conn > 0
-
-        for i in range(10000):
-            with commuter.connector.engine.connect() as conn:
-                assert conn.connection.is_valid
-
-        assert commuter.get_connections_count() - n_conn < 10
+    for i in range(100):
+        with _commuter.connector.open_connection() as conn:
+            assert conn is not None
+    assert commuter.get_connections_count() - n_conn < 10
+    del _commuter
 
 
 def test_repr():
@@ -105,25 +96,6 @@ def test_select_insert():
     delete_table(table_name='test_table')
 
 
-@patch('pgcom.commuter._available', False)
-def test_select_with_missing_alchemy():
-    from pgcom import Commuter
-
-    _commuter = Commuter(**conn_params)
-    assert _commuter.connector.engine is None
-
-    delete_table(table_name='test_table')
-    _commuter.execute(create_test_table())
-    _commuter.insert('test_table', create_test_data())
-    df = _commuter.select('select * from test_table')
-    df['date'] = pd.to_datetime(df['var_1'])
-
-    assert df['date'][0].date() == datetime.now().date()
-    assert len(df) == 3
-
-    delete_table(table_name='test_table')
-
-
 def test_multiple_select():
     delete_table(table_name='test_table')
     commuter.execute(create_test_table())
@@ -138,6 +110,24 @@ def test_multiple_select():
     assert commuter.get_connections_count() - n_conn < 10
 
     delete_table(table_name='test_table')
+
+
+def test_multiple_pool_select():
+    _commuter = Commuter(**conn_params, pool_size=20)
+    delete_table(table_name='test_table')
+    _commuter.execute(create_test_table())
+    _commuter.insert('test_table', create_test_data())
+
+    n_conn = _commuter.get_connections_count()
+
+    for i in range(300):
+        df = _commuter.select('select * from test_table')
+        assert len(df) == 3
+
+    assert _commuter.get_connections_count() - n_conn < 10
+
+    delete_table(table_name='test_table')
+    del _commuter
 
 
 def test_insert():
@@ -529,3 +519,22 @@ def delete_table(table_name, schema=None):
         else:
             cmd = 'drop table ' + schema + '.' + table_name + ' CASCADE'
         commuter.execute(cmd)
+
+
+def _delete_table(table_name, schema=None):
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            if commuter.is_table_exist(table_name, schema=schema):
+                if schema is None:
+                    cmd = 'drop table ' + table_name + ' CASCADE'
+                else:
+                    cmd = 'drop table ' + schema + '.' + table_name + ' CASCADE'
+                commuter.execute(cmd)
+
+            try:
+                func(*args, **kwargs)
+            except Exception:
+                pass
+        return wrapped
+    return decorator
