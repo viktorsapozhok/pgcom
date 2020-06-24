@@ -101,3 +101,10 @@ def column_names(table_name: str, schema: str) -> str:
     ORDER BY
         ordinal_position;
     """
+
+
+def conn_count() -> str:
+    """Return amount of active connections to database.
+    """
+
+    return 'SELECT SUM(numbackends) FROM pg_stat_database'

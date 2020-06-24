@@ -4,7 +4,6 @@ __all__ = [
 ]
 
 from contextlib import contextmanager
-from datetime import datetime
 from functools import wraps
 from io import StringIO
 from typing import (
@@ -12,6 +11,7 @@ from typing import (
     Callable,
     Iterator,
     List,
+    Mapping,
     Optional,
     Sequence,
     Tuple,
@@ -22,9 +22,12 @@ import numpy as np
 import pandas as pd
 import psycopg2
 from psycopg2 import pool
+from psycopg2 import sql
 from psycopg2.extras import execute_batch
 
 from . import exc, queries
+
+QueryParams = Union[Sequence[Any], Mapping[str, Any]]
 
 
 def fix_schema(func: Callable) -> Callable:
@@ -64,7 +67,7 @@ def fix_schema(func: Callable) -> Callable:
     return wrapped
 
 
-class Connector():
+class Connector:
     """Setting a connection with database.
 
     Besides the basic connection parameters any other
@@ -72,19 +75,9 @@ class Connector():
     can be passed as a keyword.
 
     Args:
-        host:
-            Database host address.
-        port:
-            Connection port number.
-        user:
-            User name.
-        password:
-            User password.
-        db_name:
-            The database name.
-        pre_ping:
-            ToDo
         pool_size:
+            ToDo.
+        pre_ping:
             ToDo
         schema:
             If schema is specified,
@@ -95,28 +88,24 @@ class Connector():
 
     def __init__(
             self,
-            host: str,
-            port: str,
-            user: str,
-            password: str,
-            db_name: str,
             pool_size: int = 20,
             pre_ping: bool = False,
             schema: Optional[str] = None,
-            **kwargs: Any
+            **kwargs: str
     ) -> None:
-        self.host = host
-        self.port = port
-        self.user = user
-        self.password = password
-        self.db_name = db_name
         self.pool_size = pool_size
         self.pre_ping = pre_ping
         self.schema = schema
         self._kwargs = kwargs
 
+        if 'db_name' in self._kwargs:
+            self._kwargs['dbname'] = self._kwargs.pop('db_name')
+
         if self.schema is not None:
-            self._kwargs['options'] = f'--search_path={self.schema}'
+            if 'options' in self._kwargs:
+                self._kwargs['options'] += f' --search_path={self.schema}'
+            else:
+                self._kwargs['options'] = f'--search_path={self.schema}'
 
         self._pool = self.make_pool()
 
@@ -124,19 +113,15 @@ class Connector():
         self.close_all()
 
     def __repr__(self) -> str:
-        schema = 'public' if self.schema is None else self.schema
-        return f'(' \
-               f'host={self.host}, ' \
-               f'user={self.user}, ' \
-               f'dbname={self.db_name}, ' \
-               f'schema={schema})'
-
-    @property
-    def closed(self) -> bool:
-        """ToDo
-        """
-
-        return self._pool.closed
+        desc = '('
+        for key in ['host', 'user', 'dbname']:
+            if key in self._kwargs.keys():
+                desc += key + '=' + self._kwargs[key] + ' '
+        if self.schema is not None:
+            desc += 'schema=' + self.schema + ')'
+        else:
+            desc += 'schema=None)'
+        return desc
 
     @contextmanager
     def open_connection(self) -> Iterator[psycopg2.connect]:
@@ -155,16 +140,6 @@ class Connector():
         finally:
             self._pool.putconn(conn)
 
-    def make_pool(self) -> pool.SimpleConnectionPool:
-        """ToDO
-        """
-
-        return pool.SimpleConnectionPool(
-            minconn=1, maxconn=self.pool_size,
-            user=self.user, password=self.password,
-            host=self.host, port=self.port, dbname=self.db_name,
-            **self._kwargs)
-
     def restart_pool(self) -> pool.SimpleConnectionPool:
         """ToDo
         """
@@ -176,45 +151,40 @@ class Connector():
         """ToDo
         """
 
-        if not self.closed:
+        if not self._pool.closed:
             self._pool.closeall()
+
+    def make_pool(self) -> pool.SimpleConnectionPool:
+        """ToDO
+        """
+
+        return pool.SimpleConnectionPool(
+            minconn=1, maxconn=self.pool_size, **self._kwargs)
 
     @staticmethod
     def ping(conn: psycopg2.connect) -> bool:
         """ToDo
         """
 
-        sta = False
+        is_alive = False
         with conn.cursor() as cur:
             cur.execute('SELECT 1')
             if cur.description is not None:
                 fetched = cur.fetchall()
                 try:
-                    sta = fetched[0][0] == 1
+                    is_alive = fetched[0][0] == 1
                 except IndexError:
                     pass
-        return sta
+        return is_alive
 
 
 class Commuter:
-    """PostgreSQL communication agent.
+    """Communication agent.
 
     Args:
-        host:
-            Database host address.
-        port:
-            Connection port number.
-        user:
-            User name.
-        password:
-            User password.
-        db_name:
-            The database name.
-
-    Keyword Args:
-        pre_ping:
-            ToDo
         pool_size:
+            ToDo.
+        pre_ping:
             ToDo
         schema:
             If schema is specified,
@@ -225,15 +195,13 @@ class Commuter:
 
     def __init__(
             self,
-            host: str,
-            port: str,
-            user: str,
-            password: str,
-            db_name: str,
-            **kwargs: Any
+            pool_size: int = 20,
+            pre_ping: bool = False,
+            schema: Optional[str] = None,
+            **kwargs: str
     ) -> None:
         self.connector = Connector(
-            host, port, user, password, db_name, **kwargs)
+            pool_size=pool_size, pre_ping=pre_ping, schema=schema, **kwargs)
 
     def __repr__(self) -> str:
         return repr(self.connector)
@@ -330,7 +298,7 @@ class Commuter:
             schema: str = 'public',
             return_id: Optional[str] = None,
             **kwargs: Any
-    ) -> Union[int, None]:
+    ) -> Optional[int]:
         """Implements `INSERT INTO ... VALUES ...` command.
 
         Args:
@@ -343,37 +311,24 @@ class Commuter:
         """
 
         sid = None
-        keys = ', '.join(kwargs.keys())
-        values = ''
+        keys = list(kwargs.keys())
 
-        for key in kwargs.keys():
-            if len(values) > 0:
-                values += ','
-
-            value = kwargs[key]
-
-            if isinstance(value, datetime):
-                values += f'\'{value}\''
-            elif isinstance(value, str):
-                values += f'\'{value}\''
-            else:
-                values += str(value)
-
-        table_name = self._table_name(table_name, schema)
-        cmd = 'INSERT INTO ' + table_name + ' (' + keys + ') '
-        cmd += 'VALUES (' + values + ')'
+        cmd = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+            sql.Identifier(schema, table_name),
+            sql.SQL(', ').join(map(sql.Identifier, keys)),
+            sql.SQL(', ').join(map(sql.Placeholder, keys)))
 
         if return_id is not None:
-            sid = self.insert_return(cmd, return_id=return_id)
+            sid = self.insert_return(cmd, return_id=return_id, values=kwargs)
         else:
-            self._execute(cmd=cmd)
+            self._execute(cmd=cmd, values=kwargs)
 
         return sid
 
     def insert_return(
             self,
-            cmd: str,
-            values: Optional[Sequence[Any]] = None,
+            cmd: Union[str, sql.Composed],
+            values: Optional[QueryParams] = None,
             return_id: Optional[str] = None
     ) -> int:
         """Insert a new row to the table and
@@ -389,7 +344,9 @@ class Commuter:
         """
 
         if return_id is not None:
-            cmd += 'RETURNING ' + return_id
+            cmd = sql.Composed([
+                sql.SQL(cmd) if isinstance(cmd, str) else cmd,
+                sql.SQL(" RETURNING {}").format(sql.Identifier(return_id))])
 
         fetched, _ = self._execute(cmd, values)
 
@@ -478,9 +435,7 @@ class Commuter:
         """Returns the amount of active connections.
         """
 
-        return self.select_one(
-            cmd='SELECT SUM(numbackends) FROM pg_stat_database',
-            default=0)
+        return self.select_one(cmd=queries.conn_count(), default=0)
 
     @fix_schema
     def resolve_primary_conflicts(
@@ -614,8 +569,8 @@ class Commuter:
 
     def _execute(
             self,
-            cmd: str,
-            values: Optional[Sequence[Any]] = None,
+            cmd: Union[str, sql.Composed],
+            values: Optional[QueryParams] = None,
             commit: Optional[bool] = True,
             batch: Optional[bool] = False
     ) -> Tuple[List[Any], List[str]]:

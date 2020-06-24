@@ -34,14 +34,13 @@ class Listener(Commuter):
 
     def __init__(
             self,
-            host: str,
-            port: str,
-            user: str,
-            password: str,
-            db_name: str,
+            pool_size: int = 20,
+            pre_ping: bool = False,
+            schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
-        super().__init__(host, port, user, password, db_name, **kwargs)
+        super().__init__(
+            pool_size=pool_size, pre_ping=pre_ping, schema=schema, **kwargs)
 
     def poll(
             self,
