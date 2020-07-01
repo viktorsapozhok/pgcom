@@ -206,24 +206,31 @@ class Commuter:
     def __repr__(self) -> str:
         return repr(self.connector)
 
-    def select(self, cmd: str) -> pd.DataFrame:
+    def select(
+            self,
+            cmd: Union[str, sql.Composed],
+            values: Optional[QueryParams] = None
+    ) -> pd.DataFrame:
         """Reads SQL query into a DataFrame.
 
         Args:
             cmd:
                 string SQL query to be executed.
+            values:
+                ToDo
 
         Returns:
             Pandas.DataFrame.
         """
 
-        records, columns = self._execute(cmd)
+        records, columns = self._execute(cmd, values=values)
         df = pd.DataFrame.from_records(records, columns=columns)
         return df
 
     def select_one(
             self,
-            cmd: str,
+            cmd: Union[str, sql.Composed],
+            values: Optional[QueryParams] = None,
             default: Optional[Any] = None
     ) -> Any:
         """Select the first element of returned DataFrame.
@@ -231,11 +238,13 @@ class Commuter:
         Args:
             cmd:
                 string SQL query to be executed.
+            values:
+                ToDo
             default:
                 If query result is empty, then return default value.
         """
 
-        fetched, _ = self._execute(cmd)
+        fetched, _ = self._execute(cmd, values=values)
 
         try:
             value = fetched[0][0]
@@ -275,7 +284,7 @@ class Commuter:
     def execute(
             self,
             cmd: str,
-            values: Optional[Sequence[Any]] = None
+            values: Optional[QueryParams] = None
     ) -> None:
         """Execute a database operation (query or command).
         """
@@ -364,7 +373,7 @@ class Commuter:
             data: pd.DataFrame,
             schema: str = 'public',
             format_data: bool = False,
-            where: Optional[str] = None
+            where: Optional[Union[str, sql.Composed]] = None
     ) -> None:
         """Places DataFrame to buffer and apply copy_from method.
 
@@ -389,13 +398,19 @@ class Commuter:
         if format_data:
             df = self._format_data(df, table_name, schema)
 
-        table_name = self._table_name(table_name, schema)
-
         with self.connector.open_connection() as conn:
             try:
                 with conn.cursor() as cur:
                     if where is not None:
-                        cur.execute(f'DELETE FROM {table_name} WHERE {where}')
+                        if isinstance(where, str):
+                            where = sql.SQL(where)
+                        cmd = sql.Composed([
+                            sql.SQL("DELETE FROM {} WHERE ").format(
+                                sql.Identifier(schema, table_name)),
+                            where])
+                        cur.execute(cmd)
+
+                    table = sql.Identifier(schema, table_name).as_string(conn)
 
                     # DataFrame to buffer
                     s_buf = StringIO()
@@ -404,11 +419,10 @@ class Commuter:
 
                     cur.copy_from(
                         file=s_buf,
-                        table=table_name,
+                        table=table,
                         sep=',',
                         null='',
                         columns=df.columns)
-
                 conn.commit()
             except Exception as e:
                 try:
@@ -602,6 +616,7 @@ class Commuter:
                 with conn.cursor() as cur:
                     if batch:
                         execute_batch(cur, cmd, values)
+#                        execute_values(cur, cmd, values)
                     else:
                         if values is None:
                             cur.execute(cmd)
