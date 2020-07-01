@@ -3,6 +3,8 @@ from functools import wraps
 
 import numpy as np
 import pandas as pd
+import pytest
+from psycopg2 import sql
 
 from pgcom import Commuter, exc
 from .conftest import conn_params
@@ -10,45 +12,68 @@ from .conftest import conn_params
 commuter = Commuter(**conn_params)
 
 
-def test_connection():
-    with commuter.connector.open_connection() as conn:
-        assert conn is not None
+def with_table(table_name, create_callback, *create_args, schema='public'):
+    def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            delete_table(table_name, schema=schema)
+            try:
+                create_callback(*create_args)
+                func(*args, **kwargs)
+            except Exception:
+                pass
+            finally:
+                delete_table(table_name, schema=schema)
+        return wrapped
+    return decorator
 
 
-def test_connection_keywords():
-    _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
-    with _commuter.connector.open_connection() as conn:
-        assert conn is not None
-    del _commuter
+def delete_table(table_name, schema='public'):
+    if commuter.is_table_exist(table_name, schema=schema):
+        commuter.execute(
+            sql.SQL("DROP TABLE {} CASCADE").format(
+                sql.Identifier(schema, table_name)))
 
 
-def test_multiple_connection():
-    n_conn = commuter.get_connections_count()
-    assert n_conn > 0
-
-    for i in range(100):
-        with commuter.connector.open_connection() as conn:
-            assert conn is not None
-    assert commuter.get_connections_count() - n_conn < 10
-
-
-def test_pool_connection():
-    _commuter = Commuter(**conn_params, pool_size=20)
-    with _commuter.connector.open_connection() as conn:
-        assert conn is not None
-    del _commuter
+def create_test_table(schema='public'):
+    return f"""
+    CREATE TABLE IF NOT EXISTS {schema}.test_table (
+        var_1 timestamp,
+        var_2 integer NOT NULL PRIMARY KEY,
+        var_3 text,
+        var_4 real,
+        var_5 integer);
+    """
 
 
-def test_multiple_pool_connection():
-    _commuter = Commuter(**conn_params, pool_size=20)
-    n_conn = _commuter.get_connections_count()
-    assert n_conn > 0
+def create_test_table_serial():
+    return """
+    CREATE TABLE IF NOT EXISTS model.test_table (
+        id SERIAL PRIMARY KEY,
+        var_1 timestamp,
+        var_2 integer NOT NULL,
+        var_3 text,
+        var_4 real);
+    """
 
-    for i in range(100):
-        with _commuter.connector.open_connection() as conn:
-            assert conn is not None
-    assert commuter.get_connections_count() - n_conn < 10
-    del _commuter
+
+def create_child_table(child_name, parent_name):
+    return f"""
+    CREATE TABLE IF NOT EXISTS {child_name} (
+        var_1 integer,
+        var_2 integer,
+        var_3 integer,
+        FOREIGN KEY (var_1) REFERENCES {parent_name}(var_2));
+    """
+
+
+def create_test_data():
+    return pd.DataFrame({
+        'var_1': pd.date_range(datetime.now(), periods=3),
+        'var_2': [1, 2, 3],
+        'var_3': ['x', 'xx', 'xxx'],
+        'var_4': [1.1, 2.2, 3.3],
+        'var_5': [1, 2, 3]})
 
 
 def test_repr():
@@ -56,92 +81,46 @@ def test_repr():
     assert repr(commuter)[-1] == ')'
 
 
+@with_table('test_table', create_test_table)
 def test_execute():
-    delete_table(table_name='test_table')
-    assert not commuter.is_table_exist('test_table')
-
-    commuter.execute('create table if not exists test_table(var_1 integer)')
     assert commuter.is_table_exist('test_table')
-
-    try:
-        commuter.execute('select 1 from fake_table')
-        assert False
-    except exc.QueryExecutionError:
-        assert True
-
-    delete_table(table_name='test_table')
+    with pytest.raises(exc.QueryExecutionError) as e:
+        commuter.execute('SELECT 1 FROM fake_table')
+    assert e.type == exc.QueryExecutionError
 
 
+@with_table('test_table', create_test_table)
 def test_execute_script():
-    delete_table(table_name='test_table')
-
-    commuter.execute(create_test_table())
-
     assert commuter.is_table_exist('test_table')
 
-    delete_table(table_name='test_table')
 
-
+@with_table('test_table', create_test_table)
 def test_select_insert():
-    delete_table(table_name='test_table')
-    commuter.execute(create_test_table())
     commuter.insert('test_table', create_test_data())
-    df = commuter.select('select * from test_table')
+    df = commuter.select('SELECT * FROM test_table')
     df['date'] = pd.to_datetime(df['var_1'])
-
     assert df['date'][0].date() == datetime.now().date()
     assert len(df) == 3
 
-    delete_table(table_name='test_table')
 
-
+@with_table('test_table', create_test_table)
 def test_multiple_select():
-    delete_table(table_name='test_table')
-    commuter.execute(create_test_table())
     commuter.insert('test_table', create_test_data())
-
     n_conn = commuter.get_connections_count()
-
     for i in range(300):
-        df = commuter.select('select * from test_table')
+        df = commuter.select('SELECT * FROM test_table')
         assert len(df) == 3
-
     assert commuter.get_connections_count() - n_conn < 10
-
-    delete_table(table_name='test_table')
-
-
-def test_multiple_pool_select():
-    _commuter = Commuter(**conn_params, pool_size=20)
-    delete_table(table_name='test_table')
-    _commuter.execute(create_test_table())
-    _commuter.insert('test_table', create_test_data())
-
-    n_conn = _commuter.get_connections_count()
-
-    for i in range(300):
-        df = _commuter.select('select * from test_table')
-        assert len(df) == 3
-
-    assert _commuter.get_connections_count() - n_conn < 10
-
-    delete_table(table_name='test_table')
-    del _commuter
 
 
 def test_insert():
-    try:
+    with pytest.raises(exc.QueryExecutionError) as e:
         commuter.insert('fake_table', create_test_data())
-        assert False
-    except exc.QueryExecutionError:
-        assert True
+    assert e.type == exc.QueryExecutionError
 
 
+@with_table('test_table', create_test_table)
 def test_select_one():
-    delete_table(table_name='test_table')
-
-    commuter.execute(create_test_table())
-
     cmd = 'SELECT MAX(var_2) FROM test_table'
     value = commuter.select_one(cmd=cmd, default=0)
     assert value == 0
@@ -157,39 +136,26 @@ def test_select_one():
     value = commuter.select_one('DROP TABLE test_table', default=1)
     assert value == 1
 
-    delete_table(table_name='test_table')
 
-
+@with_table('test_table', create_test_table)
 def test_table_exist():
-    delete_table(table_name='test_table')
-
-    assert not commuter.is_table_exist('test_table')
-
-    commuter.execute(create_test_table())
-
     assert commuter.is_table_exist('test_table')
 
     delete_table(table_name='test_table')
+    assert not commuter.is_table_exist('test_table')
 
 
+@with_table('test_table', create_test_table)
 def test_copy_from():
-    delete_table(table_name='test_table')
-
-    commuter.execute(create_test_table())
-
     commuter.copy_from('test_table', create_test_data())
-    df = commuter.select('select * from test_table')
+    df = commuter.select('SELECT * FROM test_table')
     df['date'] = pd.to_datetime(df['var_1'])
     assert df['date'][0].date() == datetime.now().date()
     assert len(df) == 3
 
-    try:
+    with pytest.raises(exc.CopyError) as e:
         commuter.copy_from('fake_table', create_test_data())
-        assert False
-    except exc.CopyError:
-        assert True
-
-    delete_table(table_name='test_table')
+    assert e.type == exc.CopyError
 
 
 def test_copy_from_schema():
@@ -311,21 +277,15 @@ def test_execute_with_params():
     delete_table(table_name='people')
 
 
+@with_table('test_table', create_test_table, schema='model')
 def test_schema():
     _commuter = Commuter(**conn_params, schema='model')
-
-    delete_table(table_name='test_table', schema='model')
-
-    _commuter.execute(create_test_table())
     _commuter.insert('test_table', create_test_data())
-
-    df = _commuter.select('select * from test_table')
+    df = _commuter.select('SELECT * FROM test_table')
     df['date'] = pd.to_datetime(df['var_1'])
-
     assert df['date'][0].date() == datetime.now().date()
     assert len(df) == 3
-
-    delete_table(table_name='test_table', schema='model')
+    del _commuter
 
 
 def test_resolve_primary_conflicts():
@@ -463,77 +423,3 @@ def test_insert_row_return():
     assert sid == 0
 
     delete_table(table_name='test_table', schema='model')
-
-
-def create_test_table(schema=None):
-    if schema is not None:
-        table_name = schema + '.test_table'
-    else:
-        table_name = 'test_table'
-
-    return f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        var_1 timestamp,
-        var_2 integer NOT NULL PRIMARY KEY,
-        var_3 text,
-        var_4 real,
-        var_5 integer);
-    """
-
-
-def create_test_data():
-    return pd.DataFrame({
-        'var_1': pd.date_range(datetime.now(), periods=3),
-        'var_2': [1, 2, 3],
-        'var_3': ['x', 'xx', 'xxx'],
-        'var_4': [1.1, 2.2, 3.3],
-        'var_5': [1, 2, 3]})
-
-
-def create_test_table_serial():
-    return """
-    CREATE TABLE IF NOT EXISTS model.test_table (
-        id SERIAL PRIMARY KEY,
-        var_1 timestamp,
-        var_2 integer NOT NULL,
-        var_3 text,
-        var_4 real);
-    """
-
-
-def create_child_table(child_name, parent_name):
-    return f"""
-    CREATE TABLE IF NOT EXISTS {child_name} (
-        var_1 integer,
-        var_2 integer,
-        var_3 integer,
-        FOREIGN KEY (var_1) REFERENCES {parent_name}(var_2));
-    """
-
-
-def delete_table(table_name, schema=None):
-    if commuter.is_table_exist(table_name, schema=schema):
-        if schema is None:
-            cmd = 'drop table ' + table_name + ' CASCADE'
-        else:
-            cmd = 'drop table ' + schema + '.' + table_name + ' CASCADE'
-        commuter.execute(cmd)
-
-
-def _delete_table(table_name, schema=None):
-    def decorator(func):
-        @wraps(func)
-        def wrapped(*args, **kwargs):
-            if commuter.is_table_exist(table_name, schema=schema):
-                if schema is None:
-                    cmd = 'drop table ' + table_name + ' CASCADE'
-                else:
-                    cmd = 'drop table ' + schema + '.' + table_name + ' CASCADE'
-                commuter.execute(cmd)
-
-            try:
-                func(*args, **kwargs)
-            except Exception:
-                pass
-        return wrapped
-    return decorator

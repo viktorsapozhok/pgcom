@@ -283,7 +283,7 @@ class Commuter:
 
     def execute(
             self,
-            cmd: str,
+            cmd: Union[str, sql.Composed],
             values: Optional[QueryParams] = None
     ) -> None:
         """Execute a database operation (query or command).
