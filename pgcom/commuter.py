@@ -457,7 +457,7 @@ class Commuter:
             table_name: str,
             data: pd.DataFrame,
             schema: str = 'public',
-            where: Optional[str] = None
+            where: Optional[Union[str, sql.Composed]] = None
     ) -> pd.DataFrame:
         """Resolve primary key conflicts in DataFrame.
 
@@ -489,11 +489,16 @@ class Commuter:
         df = data.copy()
 
         if len(p_key) > 0:
-            table_name = self._table_name(table_name, schema)
-
-            cmd = 'SELECT * FROM ' + table_name
             if where is not None:
-                cmd += ' WHERE ' + where
+                if isinstance(where, str):
+                    where = sql.SQL(where)
+                cmd = sql.Composed([
+                    sql.SQL("SELECT * FROM {} WHERE ").format(
+                        sql.Identifier(schema, table_name)),
+                    where])
+            else:
+                cmd = sql.SQL("SELECT * FROM {}").format(
+                    sql.Identifier(schema, table_name))
 
             table_data = self.select(cmd)
 
@@ -516,7 +521,7 @@ class Commuter:
             parent_name: str,
             data: pd.DataFrame,
             schema: str = 'public',
-            where: Optional[str] = None,
+            where: Optional[Union[str, sql.Composed]] = None,
             parent_schema: Optional[str] = None
     ) -> pd.DataFrame:
         """Resolve foreign key conflicts in DataFrame.
@@ -557,11 +562,16 @@ class Commuter:
             table_name, parent_name, schema, parent_schema)
 
         if len(foreign_key) > 0:
-            parent_table = self._table_name(parent_name, parent_schema)
-
-            cmd = 'SELECT * FROM ' + parent_table
             if where is not None:
-                cmd += ' WHERE ' + where
+                if isinstance(where, str):
+                    where = sql.SQL(where)
+                cmd = sql.Composed([
+                    sql.SQL("SELECT * FROM {} WHERE ").format(
+                        sql.Identifier(parent_schema, parent_name)),
+                    where])
+            else:
+                cmd = sql.SQL("SELECT * FROM {}").format(
+                    sql.Identifier(parent_schema, parent_name))
 
             parent_data = self.select(cmd)
 
@@ -574,7 +584,8 @@ class Commuter:
                 # remove rows which are not in parent index
                 df = df[df.index.isin(parent_data.index)]
                 # reset index and sort columns
-                df = df.reset_index(level=foreign_key['child_column'].to_list())
+                df = df.reset_index(
+                    level=foreign_key['child_column'].to_list())
                 df = df[data.columns]
             else:
                 df = pd.DataFrame()
