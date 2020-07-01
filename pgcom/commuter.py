@@ -274,10 +274,10 @@ class Commuter:
                 Name of the database schema.
         """
 
-        table_name = self._table_name(table_name, schema)
-        columns = ','.join(list(data.columns))
-        values = 'VALUES({})'.format(','.join(['%s' for _ in data.columns]))
-        cmd = 'INSERT INTO {} ({}) {}'.format(table_name, columns, values)
+        cmd = "INSERT INTO {} ({}) VALUES ({})".format(
+            self._table_name(table_name, schema),
+            ", ".join(list(data.columns)),
+            ", ".join(['%s' for _ in data.columns]))
 
         self._execute(cmd=cmd, values=data.values, batch=True)
 
@@ -627,7 +627,6 @@ class Commuter:
                 with conn.cursor() as cur:
                     if batch:
                         execute_batch(cur, cmd, values)
-#                        execute_values(cur, cmd, values)
                     else:
                         if values is None:
                             cur.execute(cmd)
