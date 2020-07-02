@@ -1,7 +1,7 @@
 conn_params = {
-    'host': 'localhost',
+    'host': 'postgresql',
     'port': '5432',
     'user': 'postgres',
-    'password': 'password',
-    'db_name': 'test_db'
+    'password': 'postgres',
+    'db_name': 'test'
 }

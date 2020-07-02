@@ -1,6 +1,16 @@
 ChangeLog
 =========
 
+0.2.0 (2020-07-02)
+------------------
+
+* Added support of `psycopg2.sql.Composed` arguments to :class:`~pgcom.commuter.Commuter` methods
+* Fixed query parameters issues in :class:`~pgcom.commuter.Commuter` methods (`#11 <https://github.com/viktorsapozhok/pgcom/issues/11>`__)
+* Made connect args compatible with `psycopg2.connect`
+* Added `pre_ping` and `max_connects` options to :class:`~pgcom.commuter.Connector` (`#12 <https://github.com/viktorsapozhok/pgcom/issues/12>`__, `#14 <https://github.com/viktorsapozhok/pgcom/issues/14>`__)
+* Added connection pooling to :class:`~pgcom.commuter.Connector`
+* Deprecated SQLAlchemy dependencies
+
 0.1.7 (2020-05-31)
 ------------------
 

@@ -16,7 +16,7 @@ and create a new commuter instance:
         port='5432',
         user='postgres',
         password='password',
-        db_name='test_db')
+        dbname='test_db')
 
 Any other connection parameter can be passed as a keyword.
 The list of the supported parameters
