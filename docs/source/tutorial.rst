@@ -1,31 +1,42 @@
-Overview
+Tutorial
 ========
 
 Basic Usage
 -----------
 
-To initialize a new commuter, you need to set the basic connection parameters
-and create a new commuter instance:
+Here is an interactive session showing the basic commands usage.
 
 .. code-block:: python
 
-    from pgcom import Commuter
+    >>> import pandas as pd
+    >>> from pgcom import Commuter
 
-    commuter = Commuter(
-        host='localhost',
-        port='5432',
-        user='postgres',
-        password='password',
-        dbname='test_db')
+    # create commuter
+    >>> commuter = Commuter(dbname='test', user='postgres', password='secret', host='localhost')
+
+    # execute a command: this creates a new table
+    >>> commuter.execute("CREATE TABLE test (id serial PRIMARY KEY, num integer, data varchar);")
+
+    # insert from DataFrame to a table
+    >>> df = pd.DataFrame([[100, "abc"], [200, "abc'def"]], columns=['num', 'data'])
+    >>> commuter.insert(table_name='test', data=df)
+
+    # select from table and return output as DataFrame
+    >>> commuter.select("SELECT * FROM test")
+       id  num     data
+    0   1  100      abc
+    1   2  200  abc'def
+
+    # pass data to fill a query placeholders
+    >>> commuter.select("SELECT * FROM test WHERE data = (%s)", ("abc'def",))
+       id  num     data
+    0   2  200  abc'def
 
 Any other connection parameter can be passed as a keyword.
-The list of the supported parameters
+The list of supported parameters
 `can be seen here <https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS>`_.
 
-Basic operations are provided with :func:`~pgcom.commuter.Commuter.execute` and
-:func:`~pgcom.commuter.Commuter.select`, :func:`~pgcom.commuter.Commuter.insert` methods.
-
-Execute a database operation (query or command):
+Execute sqlquery:
 
 .. code-block:: python
 
