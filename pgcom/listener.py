@@ -36,11 +36,13 @@ class Listener(Commuter):
             self,
             pool_size: int = 20,
             pre_ping: bool = False,
+            max_reconnects: int = 3,
             schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
         super().__init__(
-            pool_size=pool_size, pre_ping=pre_ping, schema=schema, **kwargs)
+            pool_size=pool_size, pre_ping=pre_ping,
+            max_reconnects=max_reconnects, schema=schema, **kwargs)
 
     def poll(
             self,

@@ -1,4 +1,5 @@
 __all__ = [
+    'fix_schema',
     'Connector',
     'Commuter'
 ]
@@ -6,6 +7,8 @@ __all__ = [
 from contextlib import contextmanager
 from functools import wraps
 from io import StringIO
+import random
+import time
 from typing import (
     Any,
     Callable,
@@ -30,7 +33,7 @@ from . import exc, queries
 QueryParams = Union[Sequence[Any], Mapping[str, Any]]
 
 
-def fix_schema(func: Callable) -> Callable:
+def fix_schema(func: Callable[..., Any]) -> Callable[..., Any]:
     """Unifies schema definitions.
 
     It applies `Commuter._get_schema()` method before calling the wrapped
@@ -79,6 +82,8 @@ class Connector:
             ToDo.
         pre_ping:
             ToDo
+        max_reconnects:
+            ToDo
         schema:
             If schema is specified,
             then setting a connection to the schema only.
@@ -90,11 +95,13 @@ class Connector:
             self,
             pool_size: int = 20,
             pre_ping: bool = False,
+            max_reconnects: int = 3,
             schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
         self.pool_size = pool_size
         self.pre_ping = pre_ping
+        self.max_reconnects = max_reconnects
         self.schema = schema
         self._kwargs = kwargs
 
@@ -131,10 +138,14 @@ class Connector:
         conn = self._pool.getconn()
 
         if self.pre_ping:
-            if not self.ping(conn):
-                self._pool = self.restart_pool()
-                conn = self._pool.getconn()
-
+            for n in range(self.max_reconnects):
+                if not self.ping(conn):
+                    if n > 0:
+                        time.sleep(self._back_off_time(n - 1))
+                    self._pool = self.restart_pool()
+                    conn = self._pool.getconn()
+                else:
+                    break
         try:
             yield conn
         finally:
@@ -177,6 +188,10 @@ class Connector:
                     pass
         return is_alive
 
+    @staticmethod
+    def _back_off_time(n: int) -> int:
+        return (2 ** n) + (random.randint(0, 1000) / 1000)
+
 
 class Commuter:
     """Communication agent.
@@ -185,6 +200,8 @@ class Commuter:
         pool_size:
             ToDo.
         pre_ping:
+            ToDo
+        max_connects:
             ToDo
         schema:
             If schema is specified,
@@ -197,11 +214,13 @@ class Commuter:
             self,
             pool_size: int = 20,
             pre_ping: bool = False,
+            max_reconnects: int = 3,
             schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
         self.connector = Connector(
-            pool_size=pool_size, pre_ping=pre_ping, schema=schema, **kwargs)
+            pool_size=pool_size, pre_ping=pre_ping,
+            max_reconnects=max_reconnects, schema=schema, **kwargs)
 
     def __repr__(self) -> str:
         return repr(self.connector)
