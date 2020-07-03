@@ -19,8 +19,8 @@ $ pip install pgcom
 
 ## Key features
 
-* Querying from database to Pandas DataFrame 
-* Writing from DataFrame to a database tables.
+* Reading from database table to Pandas DataFrame. 
+* Writing from DataFrame to a table.
 * Adaptation between DataFrames and COPY FROM.
 * Methods to resolve conflicts in DataFrame before applying COPY FROM.
 * Tools for setting asynchronous communication with database using LISTEN and NOTIFY commands.
