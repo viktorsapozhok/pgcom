@@ -8,8 +8,9 @@ import pytest
 from psycopg2 import sql
 
 from pgcom import Commuter, exc
-from .conftest import conn_params
+from .conftest import ConnParams
 
+conn_params = ConnParams().get()
 commuter = Commuter(**conn_params)
 
 

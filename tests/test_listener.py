@@ -1,10 +1,10 @@
 import json
 
 from pgcom import Commuter, Listener
-from .conftest import conn_params
+from .conftest import ConnParams
 
-commuter = Commuter(**conn_params)
-listener = Listener(**conn_params)
+commuter = Commuter(**ConnParams().get())
+listener = Listener(**ConnParams().get())
 
 
 def test_poll():
