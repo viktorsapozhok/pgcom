@@ -6,5 +6,3 @@ API Reference
 
     commuter
     listener
-    queries
-    exc
