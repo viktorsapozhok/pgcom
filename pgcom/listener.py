@@ -20,16 +20,31 @@ class Listener(Commuter):
     """Listener on the notification channel.
 
     This class implements an asynchronous interaction with database
-    offered by PostgreSQL commands `LISTEN` and `NOTIFY`.
+    offered by PostgreSQL commands LISTEN and NOTIFY.
 
-    Notifications are received after trigger is fired, the `poll()`
-    method can be used to check for the new notifications without
-    wasting resources.
+    Notifications are received after trigger is fired, the
+    :func:`~pgcom.listener.Listener.poll` method can be used
+    to check for the new notifications without wasting resources.
 
-    Methods `create_notify_function()` and `create_trigger()` present
+    Methods :func:`~pgcom.listener.Listener.create_notify_function` and
+    :func:`~pgcom.listener.Listener.create_trigger` present
     basic query constructors, which can be used to define a new trigger
     and a new function associated with this trigger. Some custom
-    definitions can be done using `execute()` method.
+    definitions can be done using :func:`~pgcom.commuter.Commuter.execute`
+    method.
+
+    Args:
+        pool_size:
+            The maximum amount of connections the pool will support.
+        pre_ping:
+            If True, the pool will emit a "ping" on the connection to
+            test if the connection is alive. If not, the connection will
+            be reconnected.
+        max_reconnects:
+            The maximum amount of reconnects, defaults to 3.
+        schema:
+            If schema is specified,
+            then setting a connection to the schema only.
     """
 
     def __init__(
@@ -143,9 +158,8 @@ class Listener(Commuter):
     ) -> None:
         """Create trigger.
 
-        Creates a new trigger associated with the table `table_name` and
-        executed the specified function `func_name` when certain
-        events occur.
+        Creates a new trigger associated with the table and
+        executed the specified function when certain events occur.
 
         Args:
             table_name:
@@ -159,13 +173,13 @@ class Listener(Commuter):
                 The name to give to the new trigger. If not specified, then
                 the automatically created name will be assigned.
             when:
-                One of `BEFORE`, `AFTER`, `INSTEAD OF`.
+                One of "BEFORE", "AFTER", "INSTEAD OF".
                 Determines when function is called.
             event:
-                One of `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`.
-                Use `OR` for event combinations, e.g. `INSERT OR UPDATE`.
+                One of "INSERT", "UPDATE", "DELETE", "TRUNCATE".
+                Use "OR" for event combinations, e.g. "INSERT OR UPDATE".
             for_each:
-                One of `ROW`, `STATEMENT`. This specifies whether the
+                One of "ROW", "STATEMENT". This specifies whether the
                 trigger should be fired once for every row affected by the
                 event, or just once per SQL statement.
         """

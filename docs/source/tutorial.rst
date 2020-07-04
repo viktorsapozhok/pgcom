@@ -107,6 +107,38 @@ you can use :func:`~pgcom.commuter.Commuter.resolve_primary_conflicts` and :func
     Be careful when resolving conflicts on DataFrame. Since both methods query data from the table,
     the whole table will be queried if you don't specify ``where`` parameter.
 
+Connection options
+------------------
+
+A connection pooling technique is used to maintain a "pool" of active database connections
+in memory which are reused across the requests.
+
+Testing the connection for liveness is available by using ``pre_ping`` argument. This feature
+will normally emit "SELECT 1" statement on each request to the database. If an error is raised,
+the pool will be immediately restarted.
+
+.. code-block:: python
+
+    >>> commuter = Commuter(pre_ping=True, **conn_args)
+
+The exponential backoff strategy is used for reconnection. By default, it implements 3 reconnection attempts.
+This can be changed by setting ``max_reconnects`` argument.
+
+.. code-block:: python
+
+    >>> commuter = Commuter(pre_ping=True, max_reconnects=5, **conn_args)
+
+.. note::
+
+    When creating a new instance of :class:`~pgcom.commuter.Commuter`, the connection pool
+    is created by calling :func:`~pgcom.commuter.Connector.make_pool` and the connection
+    is established. The typical usage of :class:`~pgcom.commuter.Commuter` is therefore once
+    per particular database, held globally for the lifetime of a single application process.
+
+.. warning::
+
+    So far a simple connection pool is used and it can't be shared across different threads.
+
 Extras
 ------
 
@@ -145,35 +177,3 @@ Return the number of active connections to the database.
 
     >>> commuter.get_connections_count()
     9
-
-Connection
-----------
-
-A connection pooling technique is used to maintain a "pool" of active database connections
-in memory which are reused across the requests.
-
-Testing the connection for liveness is available by using ``pre_ping`` argument. This feature
-will normally emit "SELECT 1" statement on each request to the database. If an error is raised,
-the pool will be immediately restarted.
-
-.. code-block:: python
-
-    >>> commuter = Commuter(pre_ping=True, **conn_args)
-
-The exponential backoff strategy is used for reconnection. By default, it implements 3 reconnection attempts.
-This can be changed by setting ``max_reconnects`` argument.
-
-.. code-block:: python
-
-    >>> commuter = Commuter(pre_ping=True, max_reconnects=5, **conn_args)
-
-.. note::
-
-    When creating a new instance of :class:`~pgcom.commuter.Commuter`, the connection pool
-    is created by calling :func:`~pgcom.commuter.Connector.make_pool` and the connection
-    is established. The typical usage of :class:`~pgcom.commuter.Commuter` is therefore once
-    per particular database, held globally for the lifetime of a single application process.
-
-.. warning::
-
-    So far a simple connection pool is used and it can't be shared across different threads.

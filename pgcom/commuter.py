@@ -36,13 +36,11 @@ QueryParams = Union[Sequence[Any], Mapping[str, Any]]
 def fix_schema(func: Callable[..., Any]) -> Callable[..., Any]:
     """Unifies schema definitions.
 
-    It applies `Commuter._get_schema()` method before calling the wrapped
-    function and propagates the resulting `table_name` and `schema`
-    to the wrapper.
+    It applies :func:`~pgcom.commuter.Commuter._get_schema()` method
+    before calling the wrapped function and propagates the resulting
+    ``table_name` and ``schema`` to the wrapper.
 
     It allows to call wrappers as it is shown in the following examples.
-    In the last example, the schema `model` should be defined earlier
-    when instance of the `Commuter` object has been created.
 
     Examples:
 
@@ -50,6 +48,10 @@ def fix_schema(func: Callable[..., Any]) -> Callable[..., Any]:
 
             >>> func(table_name='people', schema='model')
             >>> func(table_name='model.people')
+
+        In this example, the schema "model" should be defined earlier
+        when instance of the commuter has been created.
+
             >>> func(table_name='people')
     """
 
@@ -74,16 +76,19 @@ class Connector:
     """Setting a connection with database.
 
     Besides the basic connection parameters any other
-    connection parameter supported by `psycopg2.connect`
+    connection parameter supported by
+    `psycopg2.connect <https://www.psycopg.org/docs/module.html>`_
     can be passed as a keyword.
 
     Args:
         pool_size:
-            ToDo.
+            The maximum amount of connections the pool will support.
         pre_ping:
-            ToDo
+            If True, the pool will emit a "ping" on the connection to
+            test if the connection is alive. If not, the connection will
+            be reconnected.
         max_reconnects:
-            ToDo
+            The maximum amount of reconnects, defaults to 3.
         schema:
             If schema is specified,
             then setting a connection to the schema only.
@@ -132,7 +137,10 @@ class Connector:
 
     @contextmanager
     def open_connection(self) -> Iterator[psycopg2.connect]:
-        """ToDo
+        """Generate a free connection from the pool.
+
+        If ``pre_ping`` is True, then the connection is tested
+        whether its alive or not. If not, then reconnect.
         """
 
         conn = self._pool.getconn()
@@ -152,21 +160,24 @@ class Connector:
             self._pool.putconn(conn)
 
     def restart_pool(self) -> pool.SimpleConnectionPool:
-        """ToDo
+        """Close all the connections and create a new pool.
         """
 
         self.close_all()
         return self.make_pool()
 
     def close_all(self) -> None:
-        """ToDo
+        """Close all the connections handled by the pool.
         """
 
         if not self._pool.closed:
             self._pool.closeall()
 
     def make_pool(self) -> pool.SimpleConnectionPool:
-        """ToDO
+        """Create a connection pool.
+
+        A connection pool that can't be shared
+        across different threads.
         """
 
         return pool.SimpleConnectionPool(
@@ -174,7 +185,14 @@ class Connector:
 
     @staticmethod
     def ping(conn: psycopg2.connect) -> bool:
-        """ToDo
+        """Ping the connection for liveness.
+
+        Implements a ping ("SELECT 1") on the connection.
+        Return True if the connection is alive, otherwise False.
+
+        Args:
+            conn:
+                The connection object to ping.
         """
 
         is_alive = False
@@ -196,13 +214,20 @@ class Connector:
 class Commuter:
     """Communication agent.
 
+    When creating a new instance of Commuter, the connection pool
+    is created and the connection is established. The typical usage
+    of Commuter is therefore once per particular database,
+    held globally for the lifetime of a single application process.
+
     Args:
         pool_size:
-            ToDo.
+            The maximum amount of connections the pool will support.
         pre_ping:
-            ToDo
-        max_connects:
-            ToDo
+            If True, the pool will emit a "ping" on the connection to
+            test if the connection is alive. If not, the connection will
+            be reconnected.
+        max_reconnects:
+            The maximum amount of reconnects, defaults to 3.
         schema:
             If schema is specified,
             then setting a connection to the schema only.
@@ -230,13 +255,15 @@ class Commuter:
             cmd: Union[str, sql.Composed],
             values: Optional[QueryParams] = None
     ) -> pd.DataFrame:
-        """Reads SQL query into a DataFrame.
+        """Read SQL query into a DataFrame.
+
+        Returns a DataFrame corresponding to the result of the query.
 
         Args:
             cmd:
                 string SQL query to be executed.
             values:
-                ToDo
+                Parameters to pass to execute method.
 
         Returns:
             Pandas.DataFrame.
@@ -258,9 +285,9 @@ class Commuter:
             cmd:
                 string SQL query to be executed.
             values:
-                ToDo
+                Parameters to pass to execute method.
             default:
-                If query result is empty, then return default value.
+                If query result is empty, then return the default value.
         """
 
         fetched, _ = self._execute(cmd, values=values)
@@ -282,7 +309,7 @@ class Commuter:
             data: pd.DataFrame,
             schema: str = 'public'
     ) -> None:
-        """Write records stored in a DataFrame to database.
+        """Write records stored in a DataFrame to a database table.
 
         Args:
             table_name:
@@ -306,6 +333,12 @@ class Commuter:
             values: Optional[QueryParams] = None
     ) -> None:
         """Execute a database operation (query or command).
+
+        Args:
+            cmd:
+                string SQL query to be executed.
+            values:
+                Parameters to pass to execute method.
         """
 
         self._execute(cmd=cmd, values=values)
@@ -314,6 +347,13 @@ class Commuter:
             self,
             path2script: str
     ) -> None:
+        """Execute query from file.
+
+        Args:
+            path2script:
+                Path to the file with the query.
+        """
+
         with open(path2script, 'r') as fh:
             cmd = fh.read()
 
@@ -327,7 +367,9 @@ class Commuter:
             return_id: Optional[str] = None,
             **kwargs: Any
     ) -> Optional[int]:
-        """Implements `INSERT INTO ... VALUES ...` command.
+        """Implements insert command.
+
+        Inserted values are passed through the keyword arguments.
 
         Args:
             table_name:
@@ -364,9 +406,9 @@ class Commuter:
 
         Args:
             cmd:
-                `INSERT INTO` command.
+                INSERT INTO command.
             values:
-                Inserted values.
+                Collection of values to be inserted.
             return_id:
                 Name of the returned serial key.
         """
@@ -394,7 +436,7 @@ class Commuter:
             format_data: bool = False,
             where: Optional[Union[str, sql.Composed]] = None
     ) -> None:
-        """Places DataFrame to buffer and apply copy_from method.
+        """Places DataFrame to a buffer and apply COPY FROM command.
 
         Args:
             table_name:
@@ -410,6 +452,9 @@ class Commuter:
                 WHERE clause used to specify a condition while deleting
                 data from the table before applying copy_from,
                 DELETE command is not executed if not specified.
+
+        Raises:
+            CopyError: if execution fails.
         """
 
         df = data.copy()
@@ -459,6 +504,12 @@ class Commuter:
             schema: str = 'public'
     ) -> bool:
         """Return True if table exists, otherwise False.
+
+        Args:
+            table_name:
+                Name of the table where to insert.
+            schema:
+                Name of the schema.
         """
 
         df = self.select(queries.is_table_exist(table_name, schema))
@@ -480,26 +531,25 @@ class Commuter:
     ) -> pd.DataFrame:
         """Resolve primary key conflicts in DataFrame.
 
-        This method selects data from `table_name` and removes all
-        rows from the given DataFrame, which violate primary key
-        constraint in the selected data.
+        Remove all the rows from the DataFrame conflicted with
+        primary key constraint.
 
-        Parameter `where` is used to reduce the amount of querying data.
-        It specifies the `WHERE` clause in the `SELECT` query.
+        Parameter ``where`` is used to reduce the amount of querying data.
 
         Args:
             table_name:
                 Name of the table.
             data:
-                DataFrame with primary key conflicts.
+                DataFrame where the primary key conflicts need to be
+                resolved.
             schema:
                 Name of the schema.
             where:
-                User defined `WHERE` clause used when selecting
-                data from `table_name`.
+                WHERE clause used when querying data from the
+                ``table_name``.
 
         Returns:
-            pd.DataFrame without primary key conflicts.
+            DataFrame without primary key conflicts.
         """
 
         p_key = self._primary_key(table_name, schema)
@@ -545,16 +595,14 @@ class Commuter:
     ) -> pd.DataFrame:
         """Resolve foreign key conflicts in DataFrame.
 
-        This method selects data from `parent_table` and removes all
-        rows from the given DataFrame, which violate foreign key
-        constraint in the selected data.
+        Remove all the rows from the DataFrame conflicted with
+        foreign key constraint.
 
-        Parameter `where` is used to reduce the amount of querying data.
-        It specifies the `WHERE` clause in the `SELECT` query.
+        Parameter ``where`` is used to reduce the amount of querying data.
 
         Args:
             table_name:
-                Name of the child table, where data needs to be inserted.
+                Name of the child table, where the data needs to be inserted.
             parent_name:
                 Name of the parent table.
             data:
@@ -562,13 +610,12 @@ class Commuter:
             schema:
                 Name of the child table schema.
             where:
-                User defined `WHERE` clause used when selecting
-                data from `table_name`.
+                WHERE clause used when querying from the ``table_name``.
             parent_schema:
                 Name of the parent table schema.
 
         Returns:
-            pd.DataFrame without foreign key conflicts.
+            DataFrame without foreign key conflicts.
         """
 
         df = data.copy()
@@ -626,7 +673,7 @@ class Commuter:
             values:
                 Query parameters.
             commit:
-                Commit results if True.
+                Commit the results if True.
             batch:
                 Use execute_batch method if True.
 
@@ -635,7 +682,7 @@ class Commuter:
             Two empty lists are returned if there is no records to fetch.
 
         Raises:
-            QueryExecutionError if execution fails.
+            QueryExecutionError: if execution fails.
         """
 
         fetched = []
@@ -688,7 +735,7 @@ class Commuter:
 
         Returns:
             Pandas.DataFrame with the names and data types of all
-            columns for the given table.
+            the columns of the given table.
         """
 
         return self.select(queries.column_names(table_name, schema))
@@ -699,15 +746,6 @@ class Commuter:
             schema: Optional[str] = None
     ) -> Tuple[str, str]:
         """Return schema and table names.
-
-        Examples:
-
-            .. code::
-
-            >>> self._get_schema(table_name='my_schema.my_table')
-            ('my_schema', 'my_table')
-            >>> self._get_schema(table_name='my_table')
-            ('public', 'my_table')
         """
 
         names = str.split(table_name, '.')
@@ -730,7 +768,7 @@ class Commuter:
             table_name: str,
             schema: str
     ) -> pd.DataFrame:
-        """Return names of all columns of the primary key.
+        """Return names of all the columns included to the primary key.
 
         Args:
             table_name:
@@ -740,7 +778,7 @@ class Commuter:
 
         Returns:
             Pandas.DataFrame with the names and data types of all
-            columns of the primary key for the given table.
+            the columns included to the primary key.
         """
 
         return self.select(queries.primary_key(table_name, schema))
@@ -752,7 +790,7 @@ class Commuter:
             schema: str,
             parent_schema: str
     ) -> pd.DataFrame:
-        """Return names of all columns of the foreign key.
+        """Return names of all the columns included to the foreign key.
 
         Args:
             table_name:
@@ -765,7 +803,7 @@ class Commuter:
                 Name of the parent schema.
 
         Returns:
-            Pandas.DataFrame with columns: `child_column`, `parent_column`.
+            Pandas.DataFrame with columns included to the foreign key.
         """
 
         return self.select(queries.foreign_key(
@@ -777,7 +815,7 @@ class Commuter:
             table_name: str,
             schema: str
     ) -> pd.DataFrame:
-        """Formatting DataFrame before applying copy_from.
+        """Formatting DataFrame before applying COPY FROM.
         """
 
         # names of the table columns from information schema
