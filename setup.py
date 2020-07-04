@@ -1,7 +1,7 @@
 from os import path
 from setuptools import setup
 
-version = '0.1.7'
+version = '0.2.0'
 
 root_dir = path.abspath(path.dirname(__file__))
 
@@ -36,8 +36,7 @@ setup(
         'psycopg2-binary>=2.7.7'
     ],
     extras_require={
-        'sql': ['sqlalchemy>=1.3.12'],
-        'test': ['codecov', 'tox'],
+        'test': ['pytest', 'tox'],
         'docs': ['sphinx', 'sphinx_rtd_theme', 'sphinx-autodoc-typehints']
     },
     python_requires='>=3.6',

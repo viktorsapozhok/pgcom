@@ -15,7 +15,6 @@ ADD . home/user/pgcom
 
 # install deps
 RUN cd /home/user/pgcom && \
-    pip install --no-cache-dir --editable .[sql] && \
     pip install --no-cache-dir --editable .[test]
 
 # grant user permissions

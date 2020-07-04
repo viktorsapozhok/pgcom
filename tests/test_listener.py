@@ -1,17 +1,17 @@
 import json
 
 from pgcom import Commuter, Listener
-from .conftest import conn_params
+from .conftest import ConnParams
 
-commuter = Commuter(**conn_params)
-listener = Listener(**conn_params)
+commuter = Commuter(**ConnParams().get())
+listener = Listener(**ConnParams().get())
 
 
 def test_poll():
     delete_table('people', schema='model')
     delete_table('test', schema='model')
-    listener.execute('create table model.people (id integer, name text)')
-    listener.execute('create table model.test (id integer, name text)')
+    listener.execute('CREATE TABLE model.people (id integer, name text)')
+    listener.execute('CREATE TABLE model.test (id integer, name text)')
 
     listener.create_notify_function(
         func_name='notify_trigger',
@@ -29,7 +29,7 @@ def test_poll():
         on_close=on_close,
         timeout=1)
 
-    df = commuter.select('select * from model.test')
+    df = commuter.select('SELECT * FROM model.test')
 
     assert df['id'].to_list() == [2, 3]
 
@@ -72,6 +72,6 @@ def on_close():
 def delete_table(table_name, schema=None):
     if commuter.is_table_exist(table_name, schema=schema):
         if schema is None:
-            commuter.execute('drop table ' + table_name)
+            commuter.execute('DROP TABLE ' + table_name)
         else:
-            commuter.execute('drop table ' + schema + '.' + table_name)
+            commuter.execute('DROP TABLE ' + schema + '.' + table_name)

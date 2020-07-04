@@ -15,7 +15,7 @@ services:
     image: postgres:12
     container_name: pgcom
     environment:
-      - POSTGRES_HOST=pgcom
+      - POSTGRES_HOST=postgresql
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_PORT=5432
