@@ -209,7 +209,7 @@ Here is the example of simple application receiving notification when rows are i
     >>> def on_notify(payload):
     ...     print("received notification")
 
-    # activate listening loop
+    # listening loop, callback is activated on every INSERT to "test" table
     >>> listener.poll(channel='test_channel', on_notify=on_notify)
     received notification
     received notification
