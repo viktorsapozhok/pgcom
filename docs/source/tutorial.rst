@@ -191,6 +191,7 @@ listening on the channel is notified. A payload can be passed to provide some ex
 This is commonly used when sending notifications that table rows have been modified.
 
 Here is the example of simple application receiving notification when rows are inserted to the table.
+See `API reference <https://pgcom.readthedocs.io/en/latest/reference/listener.html>`_ for more details
 
 .. code-block:: python
 
