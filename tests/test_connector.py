@@ -1,10 +1,7 @@
 from unittest.mock import patch
 
 from pgcom import Connector, Commuter
-from .conftest import ConnParams
-
-conn_params = ConnParams().get()
-commuter = Commuter(**conn_params)
+from .conftest import commuter, conn_params
 
 
 def _ping(cls, conn):

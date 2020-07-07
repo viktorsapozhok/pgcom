@@ -1,46 +1,17 @@
 from datetime import datetime
-from functools import wraps
 from unittest.mock import mock_open, patch
 
 import numpy as np
 import pandas as pd
 import pytest
-from psycopg2 import sql
 
 from pgcom import Commuter, exc
-from .conftest import ConnParams
-
-conn_params = ConnParams().get()
-commuter = Commuter(**conn_params)
+from .conftest import commuter, conn_params, delete_table, with_table
 
 
-def with_table(table_name, create_callback, *create_args, schema='public'):
-    def decorator(func):
-        @wraps(func)
-        def wrapped(*args, **kwargs):
-            delete_table(table_name, schema=schema)
-            try:
-                cmd = create_callback(*create_args, schema=schema)
-                commuter.execute(cmd)
-                func(*args, **kwargs)
-            except Exception:
-                assert False
-            finally:
-                delete_table(table_name, schema=schema)
-        return wrapped
-    return decorator
-
-
-def delete_table(table_name, schema='public'):
-    if commuter.is_table_exist(table_name, schema=schema):
-        commuter.execute(
-            sql.SQL("DROP TABLE {} CASCADE").format(
-                sql.Identifier(schema, table_name)))
-
-
-def create_test_table(schema='public'):
+def create_test_table(table_name, schema='public'):
     return f"""
-    CREATE TABLE IF NOT EXISTS {schema}.test_table (
+    CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
         var_1 timestamp,
         var_2 integer NOT NULL PRIMARY KEY,
         var_3 text,
@@ -49,9 +20,9 @@ def create_test_table(schema='public'):
     """
 
 
-def create_test_table_serial(schema='public'):
+def create_test_table_serial(table_name, schema='public'):
     return f"""
-    CREATE TABLE IF NOT EXISTS {schema}.test_table (
+    CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
         id SERIAL PRIMARY KEY,
         var_1 timestamp,
         var_2 integer NOT NULL,
@@ -264,8 +235,7 @@ def test_resolve_primary_conflicts():
 
 
 @with_table('test_table', create_test_table, schema='model')
-@with_table('child_table', create_child_table,
-            'child_table', 'model.test_table')
+@with_table('child_table', create_child_table, 'model.test_table')
 def test_resolve_foreign_conflicts():
     parent_data = create_test_data()
     child_data = pd.DataFrame({

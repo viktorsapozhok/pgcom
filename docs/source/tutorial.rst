@@ -177,3 +177,44 @@ Return the number of active connections to the database.
 
     >>> commuter.get_connections_count()
     9
+
+Listener
+--------
+
+PostgreSQL provides tools for setting asynchronous interaction with database session using
+`LISTEN <https://www.postgresql.org/docs/current/sql-listen.html>`_ and
+`NOTIFY <https://www.postgresql.org/docs/current/sql-notify.html>`_ commands.
+
+A client application registers as a listener on the notification channel with the LISTEN command
+(and can stop listening with the UNLISTEN command). When the command NOTIFY is executed, the application
+listening on the channel is notified. A payload can be passed to provide some extra data to the listener.
+This is commonly used when sending notifications that table rows have been modified.
+
+Here is the example of simple application receiving notification when rows are inserted to the table.
+
+.. code-block:: python
+
+    from pgcom import Listener
+
+    >>> listener = Listener(dbname="test", user="postgres", password="secret", host="localhost")
+
+    # create a function called by trigger, it generates a notification
+    # which is sending to test_channel
+    >>> listener.create_notify_function(func_name='notify_trigger', channel='test_channel')
+
+    # create a trigger executed AFTER INSERT STATEMENT
+    >>> listener.create_trigger(table_name='test', func_name='notify_trigger')
+
+    # register function callback activated on the notification
+    >>> def on_notify(payload):
+    ...     print("received notification")
+
+    # activate listening loop
+    >>> listener.poll(channel='test_channel', on_notify=on_notify)
+    received notification
+    received notification
+
+.. note::
+
+    Note that the payload is only available from PostgreSQL 9.0: notifications received
+    from a previous version server will have the payload attribute set to the empty string.

@@ -1,18 +1,18 @@
 import json
 
-from pgcom import Commuter, Listener
-from .conftest import ConnParams
+from pgcom import Listener
+from .conftest import conn_params, commuter, with_table
 
-commuter = Commuter(**ConnParams().get())
-listener = Listener(**ConnParams().get())
+listener = Listener(**conn_params)
 
 
+def create_table(table_name, schema='public'):
+    return f"CREATE TABLE {schema}.{table_name} (id integer, name text)"
+
+
+@with_table('people', create_table, schema='model')
+@with_table('test', create_table, schema='model')
 def test_poll():
-    delete_table('people', schema='model')
-    delete_table('test', schema='model')
-    listener.execute('CREATE TABLE model.people (id integer, name text)')
-    listener.execute('CREATE TABLE model.test (id integer, name text)')
-
     listener.create_notify_function(
         func_name='notify_trigger',
         channel='test_channel',
@@ -29,12 +29,9 @@ def test_poll():
         on_close=on_close,
         timeout=1)
 
-    df = commuter.select('SELECT * FROM model.test')
+    df = commuter.select("SELECT * FROM model.test")
 
     assert df['id'].to_list() == [2, 3]
-
-    delete_table('people', schema='model')
-    delete_table('test', schema='model')
 
 
 def on_notify(payload):
@@ -67,11 +64,3 @@ def on_close():
         id=3,
         name='Yeltsin',
         schema='model')
-
-
-def delete_table(table_name, schema=None):
-    if commuter.is_table_exist(table_name, schema=schema):
-        if schema is None:
-            commuter.execute('DROP TABLE ' + table_name)
-        else:
-            commuter.execute('DROP TABLE ' + schema + '.' + table_name)
