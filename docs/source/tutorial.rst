@@ -190,6 +190,14 @@ A client application registers as a listener on the notification channel with th
 listening on the channel is notified. A payload can be passed to provide some extra data to the listener.
 This is commonly used when sending notifications that table rows have been modified.
 
+Notifications are received after trigger is fired, the poll method can be used to check
+for the new notifications without wasting resources.
+
+Methods :func:`~pgcom.listener.Listener.create_notify_function` and
+:func:`~pgcom.listener.Listener.create_trigger` present basic query constructors,
+which can be used to define a new trigger and a new function associated with this trigger.
+Some custom definitions can be done using execute method.
+
 Here is the example of simple application receiving notification when rows are inserted to the table.
 See `API reference <https://pgcom.readthedocs.io/en/latest/reference/listener.html>`_ for more details
 
