@@ -19,7 +19,7 @@ Key Features
 
    installation
    tutorial
-   reference/index
+   api
    changelog
 
 MIT License (see `LICENSE <https://github.com/viktorsapozhok/pgcom/blob/master/LICENSE>`_).
