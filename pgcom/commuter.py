@@ -1,34 +1,27 @@
 __all__ = [
     'fix_schema',
-    'Connector',
     'Commuter'
 ]
 
-from contextlib import contextmanager
 from functools import wraps
 from io import StringIO
-import random
-import time
 from typing import (
     Any,
     Callable,
-    Iterator,
     List,
     Mapping,
     Optional,
     Sequence,
-    Tuple,
     Union
 )
 
 import numpy as np
 import pandas as pd
-import psycopg2
-from psycopg2 import pool
 from psycopg2 import sql
-from psycopg2.extras import execute_batch
 
 from . import exc, queries
+from .base import BaseCommuter
+from .connector import Connector
 
 QueryParams = Union[Sequence[Any], Mapping[str, Any]]
 
@@ -72,146 +65,7 @@ def fix_schema(func: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
-class Connector:
-    """Setting a connection with database.
-
-    Besides the basic connection parameters any other
-    connection parameter supported by
-    `psycopg2.connect <https://www.psycopg.org/docs/module.html>`_
-    can be passed as a keyword.
-
-    Args:
-        pool_size:
-            The maximum amount of connections the pool will support.
-        pre_ping:
-            If True, the pool will emit a "ping" on the connection to
-            test if the connection is alive. If not, the connection will
-            be reconnected.
-        max_reconnects:
-            The maximum amount of reconnects, defaults to 3.
-        schema:
-            If schema is specified,
-            then setting a connection to the schema only.
-    """
-
-    _pool: pool.SimpleConnectionPool
-
-    def __init__(
-            self,
-            pool_size: int = 20,
-            pre_ping: bool = False,
-            max_reconnects: int = 3,
-            schema: Optional[str] = None,
-            **kwargs: str
-    ) -> None:
-        self.pool_size = pool_size
-        self.pre_ping = pre_ping
-        self.max_reconnects = max_reconnects
-        self.schema = schema
-        self._kwargs = kwargs
-
-        if 'db_name' in self._kwargs:
-            self._kwargs['dbname'] = self._kwargs.pop('db_name')
-
-        if self.schema is not None:
-            if 'options' in self._kwargs:
-                self._kwargs['options'] += f' --search_path={self.schema}'
-            else:
-                self._kwargs['options'] = f'--search_path={self.schema}'
-
-        self._pool = self.make_pool()
-
-    def __del__(self) -> None:
-        self.close_all()
-
-    def __repr__(self) -> str:
-        desc = '('
-        for key in ['host', 'user', 'dbname']:
-            if key in self._kwargs.keys():
-                desc += key + '=' + self._kwargs[key] + ' '
-        if self.schema is not None:
-            desc += 'schema=' + self.schema + ')'
-        else:
-            desc += 'schema=None)'
-        return desc
-
-    @contextmanager
-    def open_connection(self) -> Iterator[psycopg2.connect]:
-        """Generate a free connection from the pool.
-
-        If ``pre_ping`` is True, then the connection is tested
-        whether its alive or not. If not, then reconnect.
-        """
-
-        conn = self._pool.getconn()
-
-        if self.pre_ping:
-            for n in range(self.max_reconnects):
-                if not self.ping(conn):
-                    if n > 0:
-                        time.sleep(self._back_off_time(n - 1))
-                    self._pool = self.restart_pool()
-                    conn = self._pool.getconn()
-                else:
-                    break
-        try:
-            yield conn
-        finally:
-            self._pool.putconn(conn)
-
-    def restart_pool(self) -> pool.SimpleConnectionPool:
-        """Close all the connections and create a new pool.
-        """
-
-        self.close_all()
-        return self.make_pool()
-
-    def close_all(self) -> None:
-        """Close all the connections handled by the pool.
-        """
-
-        if not self._pool.closed:
-            self._pool.closeall()
-
-    def make_pool(self) -> pool.SimpleConnectionPool:
-        """Create a connection pool.
-
-        A connection pool that can't be shared
-        across different threads.
-        """
-
-        return pool.SimpleConnectionPool(
-            minconn=1, maxconn=self.pool_size, **self._kwargs)
-
-    @staticmethod
-    def ping(conn: psycopg2.connect) -> bool:
-        """Ping the connection for liveness.
-
-        Implements a ping ("SELECT 1") on the connection.
-        Return True if the connection is alive, otherwise False.
-
-        Args:
-            conn:
-                The connection object to ping.
-        """
-
-        is_alive = False
-        with conn.cursor() as cur:
-            cur.execute('SELECT 1')
-            if cur.description is not None:
-                fetched = cur.fetchall()
-                try:
-                    is_alive = fetched[0][0] == 1
-                except IndexError:
-                    pass
-        return is_alive
-
-    @staticmethod
-    def _back_off_time(n: int) -> int:
-        return (2 ** n) + (random.randint(0, 1000) / 1000)
-
-
-class Commuter:
+class Commuter(BaseCommuter):
     """Communication agent.
 
     When creating a new instance of Commuter, the connection pool
@@ -243,9 +97,8 @@ class Commuter:
             schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
-        self.connector = Connector(
-            pool_size=pool_size, pre_ping=pre_ping,
-            max_reconnects=max_reconnects, schema=schema, **kwargs)
+        super().__init__(
+            Connector(pool_size, pre_ping, max_reconnects, schema, **kwargs))
 
     def __repr__(self) -> str:
         return repr(self.connector)
@@ -326,22 +179,6 @@ class Commuter:
             ", ".join(['%s' for _ in data.columns]))
 
         self._execute(cmd=cmd, values=data.values, batch=True)
-
-    def execute(
-            self,
-            cmd: Union[str, sql.Composed],
-            values: Optional[QueryParams] = None
-    ) -> None:
-        """Execute a database operation (query or command).
-
-        Args:
-            cmd:
-                string SQL query to be executed.
-            values:
-                Parameters to pass to execute method.
-        """
-
-        self._execute(cmd=cmd, values=values)
 
     def execute_script(
             self,
@@ -658,68 +495,6 @@ class Commuter:
 
         return df
 
-    def _execute(
-            self,
-            cmd: Union[str, sql.Composed],
-            values: Optional[QueryParams] = None,
-            commit: Optional[bool] = True,
-            batch: Optional[bool] = False
-    ) -> Tuple[List[Any], List[str]]:
-        """Execute a database operation, query or command.
-
-        Args:
-            cmd:
-                SQL command.
-            values:
-                Query parameters.
-            commit:
-                Commit the results if True.
-            batch:
-                Use execute_batch method if True.
-
-        Returns:
-            List of rows of a query result and list of column names.
-            Two empty lists are returned if there is no records to fetch.
-
-        Raises:
-            QueryExecutionError: if execution fails.
-        """
-
-        fetched = []
-        columns = []
-
-        with self.connector.open_connection() as conn:
-            try:
-                with conn.cursor() as cur:
-                    if batch:
-                        execute_batch(cur, cmd, values)
-                    else:
-                        if values is None:
-                            cur.execute(cmd)
-                        else:
-                            cur.execute(cmd, values)
-
-                    if cur.description is not None:
-                        fetched = cur.fetchall()
-                        columns = [desc[0] for desc in cur.description]
-
-                if commit:
-                    conn.commit()
-            except Exception as e:
-                try:
-                    conn.rollback()
-                except Exception as ex:
-                    exc.raise_with_traceback(
-                        exc.QueryExecutionError(
-                            f'Execution failed on sql: {cmd}\n{ex}\n '
-                            f'unable to rollback'))
-
-                exc.raise_with_traceback(
-                    exc.QueryExecutionError(
-                        f'Execution failed on sql: {cmd}\n{e}\n'))
-
-        return fetched, columns
-
     def _table_columns(
             self,
             table_name: str,
@@ -739,29 +514,6 @@ class Commuter:
         """
 
         return self.select(queries.column_names(table_name, schema))
-
-    def _get_schema(
-            self,
-            table_name: str,
-            schema: Optional[str] = None
-    ) -> Tuple[str, str]:
-        """Return schema and table names.
-        """
-
-        names = str.split(table_name, '.')
-
-        if len(names) == 2:
-            return names[0], names[1]
-
-        if schema is not None:
-            _schema = schema
-        else:
-            if self.connector.schema is not None:
-                _schema = self.connector.schema
-            else:
-                _schema = 'public'
-
-        return _schema, table_name
 
     def _primary_key(
             self,

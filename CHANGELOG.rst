@@ -1,6 +1,12 @@
 ChangeLog
 =========
 
+0.2.1 (2020-07-13)
+------------------
+
+* Added :class:`~pgcom.base.BaseConnector`
+* Added :class:`~pgcom.base.BaseCommuter`
+
 0.2.0 (2020-07-04)
 ------------------
 

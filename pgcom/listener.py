@@ -1,4 +1,6 @@
-__all__ = ['Listener']
+__all__ = [
+    'Listener'
+]
 
 import logging
 from select import select
@@ -10,13 +12,14 @@ from typing import (
 
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-from . import Commuter
+from .base import BaseCommuter
+from .connector import Connector
 from .commuter import fix_schema
 
 logger = logging.getLogger('pgcom')
 
 
-class Listener(Commuter):
+class Listener(BaseCommuter):
     """Listener on the notification channel.
 
     This class implements an asynchronous interaction with database
@@ -56,8 +59,7 @@ class Listener(Commuter):
             **kwargs: str
     ) -> None:
         super().__init__(
-            pool_size=pool_size, pre_ping=pre_ping,
-            max_reconnects=max_reconnects, schema=schema, **kwargs)
+            Connector(pool_size, pre_ping, max_reconnects, schema, **kwargs))
 
     def poll(
             self,

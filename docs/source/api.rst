@@ -1,20 +1,22 @@
 API Reference
 =============
 
-Connection
-----------
+Connection handlers
+-------------------
 
 .. autosummary::
    :toctree: _generated
 
-   ~pgcom.commuter.Connector
+   ~pgcom.base.BaseConnector
+   ~pgcom.connector.Connector
 
-Communication
--------------
+Communication agents
+--------------------
 
 .. autosummary::
    :toctree: _generated
 
+   ~pgcom.base.BaseCommuter
    ~pgcom.commuter.Commuter
 
 Asynchronous interaction
