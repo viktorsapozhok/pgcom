@@ -265,6 +265,19 @@ def test_insert_row():
 
 
 @with_table('test_table', create_test_table)
+def test_insert_numpy_types():
+    commuter.insert_row(
+        table_name='test_table',
+        var_1=datetime(2019, 12, 9),
+        var_2=np.int64(7),
+        var_3='test',
+        var_4=np.float64(7.1))
+    df = commuter.select('SELECT * FROM test_table')
+    assert df['var_2'][0] == 7
+    assert df['var_4'][0] == 7.1
+
+
+@with_table('test_table', create_test_table)
 def test_insert_string_with_quotes():
     commuter.insert_row('test_table', var_2=1, var_3="test 'message'")
     msg = commuter.select_one('SELECT var_3 FROM test_table')

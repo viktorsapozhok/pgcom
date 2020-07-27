@@ -17,13 +17,17 @@ from typing import (
 
 import abc
 
+import numpy as np
 import psycopg2
 from psycopg2 import sql
+from psycopg2.extensions import register_adapter, AsIs
 from psycopg2.extras import execute_batch
 
 from . import exc
 
 QueryParams = Union[Sequence[Any], Mapping[str, Any]]
+register_adapter(np.int64, AsIs)
+register_adapter(np.float64, AsIs)
 
 
 class BaseConnector(abc.ABC):
