@@ -1,13 +1,8 @@
-__all__ = [
-    'fix_schema',
-    'Commuter'
-]
+__all__ = ["Commuter"]
 
-from functools import wraps
 from io import StringIO
 from typing import (
     Any,
-    Callable,
     List,
     Mapping,
     Optional,
@@ -24,45 +19,6 @@ from .base import BaseCommuter
 from .connector import Connector
 
 QueryParams = Union[Sequence[Any], Mapping[str, Any]]
-
-
-def fix_schema(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Unifies schema definitions.
-
-    It applies :func:`~pgcom.commuter.Commuter._get_schema()` method
-    before calling the wrapped function and propagates the resulting
-    ``table_name` and ``schema`` to the wrapper.
-
-    It allows to call wrappers as it is shown in the following examples.
-
-    Examples:
-
-        .. code::
-
-            >>> func(table_name='people', schema='model')
-            >>> func(table_name='model.people')
-
-        In this example, the schema "model" should be defined earlier
-        when instance of the commuter has been created.
-
-            >>> func(table_name='people')
-    """
-
-    @wraps(func)
-    def wrapped(  # type: ignore
-            self,
-            table_name: str,
-            *args: Any,
-            schema: Optional[str] = None,
-            **kwargs: Any
-    ) -> Any:
-        schema, table_name = self._get_schema(
-            table_name=table_name,
-            schema=schema)
-
-        return func(self, table_name, *args, schema=schema, **kwargs)
-
-    return wrapped
 
 
 class Commuter(BaseCommuter):
@@ -82,9 +38,6 @@ class Commuter(BaseCommuter):
             be reconnected.
         max_reconnects:
             The maximum amount of reconnects, defaults to 3.
-        schema:
-            If schema is specified,
-            then setting a connection to the schema only.
     """
 
     connector: Connector
@@ -94,11 +47,10 @@ class Commuter(BaseCommuter):
             pool_size: int = 20,
             pre_ping: bool = False,
             max_reconnects: int = 3,
-            schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
         super().__init__(
-            Connector(pool_size, pre_ping, max_reconnects, schema, **kwargs))
+            Connector(pool_size, pre_ping, max_reconnects, **kwargs))
 
     def __repr__(self) -> str:
         return repr(self.connector)
@@ -155,35 +107,7 @@ class Commuter(BaseCommuter):
 
         return value
 
-    @fix_schema
-    def insert(
-            self,
-            table_name: str,
-            data: pd.DataFrame,
-            schema: str = 'public'
-    ) -> None:
-        """Write records stored in a DataFrame to a database table.
-
-        Args:
-            table_name:
-                Name of the destination table.
-            data:
-                Pandas.DataFrame with the data to be inserted.
-            schema:
-                Name of the database schema.
-        """
-
-        cmd = "INSERT INTO {} ({}) VALUES ({})".format(
-            self._table_name(table_name, schema),
-            ", ".join(list(data.columns)),
-            ", ".join(['%s' for _ in data.columns]))
-
-        self._execute(cmd=cmd, values=data.values, batch=True)
-
-    def execute_script(
-            self,
-            path2script: str
-    ) -> None:
+    def execute_script(self, path2script: str) -> None:
         """Execute query from file.
 
         Args:
@@ -191,16 +115,72 @@ class Commuter(BaseCommuter):
                 Path to the file with the query.
         """
 
-        with open(path2script, 'r') as fh:
+        with open(path2script, "r") as fh:
             cmd = fh.read()
 
         self._execute(cmd=cmd)
 
-    @fix_schema
+    def insert(
+            self,
+            table_name: str,
+            data: pd.DataFrame,
+            columns: Optional[List[str]] = None,
+            placeholders: Optional[List[str]] = None
+    ) -> None:
+        """Write rows from a DataFrame to a database table.
+
+        Args:
+            table_name:
+                Name of the destination table.
+            data:
+                Pandas.DataFrame with the data to be inserted.
+            columns:
+                List of column names used for insert. If not specified
+                then all the columns are used. Defaults to None.
+            placeholders:
+                List of placeholders. If not specified then the default
+                placeholders are used. Defaults to None.
+
+        Examples:
+
+            .. code::
+
+                >>> self.insert("people", data)
+
+            Insert two columns, name and age.
+
+            .. code::
+
+                >>> self.insert("people", data, columns=["name", "age"])
+
+            You can customize placeholders to implement advanced insert,
+            e.g. to insert geometry data in a database with PostGIS extension.
+
+            .. code::
+
+                >>> self.insert(
+                ...     table_name="polygons",
+                ...     data=data,
+                ...     columns=["name", "geom"],
+                ...     placeholders=["%s", "ST_GeomFromText(%s, 4326)"])
+        """
+
+        if columns is None:
+            columns = list(data.columns)
+        if placeholders is None:
+            placeholders = sql.Placeholder() * len(columns)
+
+        cmd = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+            sql.SQL(table_name),
+            sql.SQL(', ').join(map(sql.Identifier, columns)),
+            sql.SQL(', ').join(placeholders))
+
+        for values in [tuple(row) for row in data[columns].to_numpy()]:
+            self._execute(cmd=cmd, values=values)
+
     def insert_row(
             self,
             table_name: str,
-            schema: str = 'public',
             return_id: Optional[str] = None,
             **kwargs: Any
     ) -> Optional[int]:
@@ -211,8 +191,6 @@ class Commuter(BaseCommuter):
         Args:
             table_name:
                 Name of the destination table.
-            schema:
-                Name of the database schema.
             return_id:
                 Name of the returned serial key.
         """
@@ -221,7 +199,7 @@ class Commuter(BaseCommuter):
         keys = list(kwargs.keys())
 
         cmd = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
-            sql.Identifier(schema, table_name),
+            sql.SQL(table_name),
             sql.SQL(', ').join(map(sql.Identifier, keys)),
             sql.SQL(', ').join(map(sql.Placeholder, keys)))
 
@@ -253,7 +231,7 @@ class Commuter(BaseCommuter):
         if return_id is not None:
             cmd = sql.Composed([
                 sql.SQL(cmd) if isinstance(cmd, str) else cmd,
-                sql.SQL(" RETURNING {}").format(sql.Identifier(return_id))])
+                sql.SQL(' RETURNING {}').format(sql.Identifier(return_id))])
 
         fetched, _ = self._execute(cmd, values)
 
@@ -264,12 +242,10 @@ class Commuter(BaseCommuter):
 
         return sid
 
-    @fix_schema
     def copy_from(
             self,
             table_name: str,
             data: pd.DataFrame,
-            schema: str = 'public',
             format_data: bool = False,
             where: Optional[Union[str, sql.Composed]] = None
     ) -> None:
@@ -280,8 +256,6 @@ class Commuter(BaseCommuter):
                 Name of the table where to insert.
             data
                 DataFrame from where to insert.
-            schema:
-                Name of the schema.
             format_data:
                 Reorder columns and adjust dtypes wrt to table metadata
                 from information_schema.
@@ -297,7 +271,7 @@ class Commuter(BaseCommuter):
         df = data.copy()
 
         if format_data:
-            df = self._format_data(df, table_name, schema)
+            df = self._format_data(df, table_name)
 
         with self.connector.open_connection() as conn:
             try:
@@ -307,11 +281,9 @@ class Commuter(BaseCommuter):
                             where = sql.SQL(where)
                         cmd = sql.Composed([
                             sql.SQL("DELETE FROM {} WHERE ").format(
-                                sql.Identifier(schema, table_name)),
+                                sql.SQL(table_name)),
                             where])
                         cur.execute(cmd)
-
-                    table = sql.Identifier(schema, table_name).as_string(conn)
 
                     # DataFrame to buffer
                     s_buf = StringIO()
@@ -320,9 +292,9 @@ class Commuter(BaseCommuter):
 
                     cur.copy_from(
                         file=s_buf,
-                        table=table,
-                        sep=',',
-                        null='',
+                        table=table_name,
+                        sep=",",
+                        null="",
                         columns=df.columns)
                 conn.commit()
             except Exception as e:
@@ -330,27 +302,94 @@ class Commuter(BaseCommuter):
                     conn.rollback()
                 except Exception as ex:
                     exc.raise_with_traceback(
-                        exc.CopyError(f'{ex}\n unable to rollback'))
+                        exc.CopyError(f"{ex}\n unable to rollback"))
 
-                exc.raise_with_traceback(exc.CopyError(f'{e}\n'))
+                exc.raise_with_traceback(exc.CopyError(f"{e}\n"))
 
-    @fix_schema
-    def is_table_exist(
-            self,
-            table_name: str,
-            schema: str = 'public'
-    ) -> bool:
+    def is_table_exist(self, table_name: str) -> bool:
         """Return True if table exists, otherwise False.
 
         Args:
             table_name:
                 Name of the table where to insert.
-            schema:
-                Name of the schema.
         """
 
-        df = self.select(queries.is_table_exist(table_name, schema))
+        _schema, _table_name = self._get_schema(table_name)
+        df = self.select(queries.is_table_exist(_table_name, _schema))
         return bool(len(df) > 0)
+
+    def is_entry_exist(self, table_name: str, **kwargs: Any) -> bool:
+        """Return True if entry already exists, otherwise return False.
+
+        Implements a simple query to verify if a specific entry exists in
+        the table. WHERE clause is created from ``**kwargs``.
+
+        Args:
+            table_name:
+                Name of the database table.
+            **kwargs:
+                Parameters to create WHERE clause.
+
+        Examples:
+            Implement query ``SELECT 1 FROM people WHERE id=5 AND num=100``.
+
+            .. code::
+
+                >>> self.is_entry_exist("my_table", id=5, num=100)
+                True
+        """
+
+        cmd = sql.SQL("SELECT 1 FROM {} WHERE {}").format(
+            sql.SQL(table_name),
+            self.make_where(list(kwargs.keys())))
+
+        res = self.select_one(cmd=cmd, values=kwargs, default=None)
+        return res is not None
+
+    def delete_entry(self, table_name: str, **kwargs: Any) -> None:
+        """Delete entry from the table.
+
+        Implements a simple query to delete a specific entry from the table.
+        WHERE clause is created from ``**kwargs``.
+
+        Args:
+            table_name:
+                Name of the database table.
+            **kwargs:
+                Parameters to create WHERE clause.
+
+        Examples:
+            Delete rows with version=100 from the table.
+
+            .. code::
+
+                >>> self.delete_entry("dict_versions", version=100)
+        """
+
+        cmd = sql.SQL("DELETE FROM {} WHERE {}").format(
+            sql.SQL(table_name),
+            self.make_where(list(kwargs.keys())))
+
+        self._execute(cmd, values=kwargs)
+
+    @staticmethod
+    def make_where(keys: List[str]) -> sql.Composed:
+        """Build WHERE clause from list of keys.
+
+        Examples:
+
+            .. code::
+
+                >>> self.make_where(["version", "task"])
+                "version=%s AND task=%s"
+        """
+
+        where = list()  # type: List[Union[sql.Composable]]
+        for key in keys:
+            if len(where) > 0:
+                where += [sql.SQL(' AND ')]
+            where += [sql.Identifier(key), sql.SQL('='), sql.Placeholder(key)]
+        return sql.Composed(where)
 
     def get_connections_count(self) -> int:
         """Returns the amount of active connections.
@@ -358,12 +397,10 @@ class Commuter(BaseCommuter):
 
         return self.select_one(cmd=queries.conn_count(), default=0)
 
-    @fix_schema
     def resolve_primary_conflicts(
             self,
             table_name: str,
             data: pd.DataFrame,
-            schema: str = 'public',
             where: Optional[Union[str, sql.Composed]] = None
     ) -> pd.DataFrame:
         """Resolve primary key conflicts in DataFrame.
@@ -379,8 +416,6 @@ class Commuter(BaseCommuter):
             data:
                 DataFrame where the primary key conflicts need to be
                 resolved.
-            schema:
-                Name of the schema.
             where:
                 WHERE clause used when querying data from the
                 ``table_name``.
@@ -389,8 +424,8 @@ class Commuter(BaseCommuter):
             DataFrame without primary key conflicts.
         """
 
-        p_key = self._primary_key(table_name, schema)
-        p_key = p_key['column_name'].to_list()
+        p_key = self.select(queries.primary_key(table_name))
+        p_key = p_key["column_name"].to_list()
 
         df = data.copy()
 
@@ -400,35 +435,30 @@ class Commuter(BaseCommuter):
                     where = sql.SQL(where)
                 cmd = sql.Composed([
                     sql.SQL("SELECT * FROM {} WHERE ").format(
-                        sql.Identifier(schema, table_name)),
+                        sql.SQL(table_name)),
                     where])
             else:
                 cmd = sql.SQL("SELECT * FROM {}").format(
-                    sql.Identifier(schema, table_name))
+                    sql.SQL(table_name))
 
             table_data = self.select(cmd)
 
             if not table_data.empty:
                 df.set_index(p_key, inplace=True)
                 table_data.set_index(p_key, inplace=True)
-
                 # remove rows which are in table data index
                 df = df[~df.index.isin(table_data.index)]
                 # reset index and sort columns
                 df = df.reset_index(level=p_key)
                 df = df[data.columns]
-
         return df
 
-    @fix_schema
     def resolve_foreign_conflicts(
             self,
             table_name: str,
             parent_name: str,
             data: pd.DataFrame,
-            schema: str = 'public',
-            where: Optional[Union[str, sql.Composed]] = None,
-            parent_schema: Optional[str] = None
+            where: Optional[Union[str, sql.Composed]] = None
     ) -> pd.DataFrame:
         """Resolve foreign key conflicts in DataFrame.
 
@@ -444,12 +474,8 @@ class Commuter(BaseCommuter):
                 Name of the parent table.
             data:
                 DataFrame with foreign key conflicts.
-            schema:
-                Name of the child table schema.
             where:
                 WHERE clause used when querying from the ``table_name``.
-            parent_schema:
-                Name of the parent table schema.
 
         Returns:
             DataFrame without foreign key conflicts.
@@ -457,12 +483,11 @@ class Commuter(BaseCommuter):
 
         df = data.copy()
 
-        parent_schema, parent_name = self._get_schema(
-            table_name=parent_name,
-            schema=parent_schema)
+        _schema, _table_name = self._get_schema(table_name)
+        _parent_schema, _parent_name = self._get_schema(parent_name)
 
-        foreign_key = self._foreign_key(
-            table_name, parent_name, schema, parent_schema)
+        foreign_key = self.select(queries.foreign_key(
+            _table_name, _schema, _parent_name, _parent_schema))
 
         if len(foreign_key) > 0:
             if where is not None:
@@ -470,138 +495,135 @@ class Commuter(BaseCommuter):
                     where = sql.SQL(where)
                 cmd = sql.Composed([
                     sql.SQL("SELECT * FROM {} WHERE ").format(
-                        sql.Identifier(parent_schema, parent_name)),
+                        sql.SQL(parent_name)),
                     where])
             else:
                 cmd = sql.SQL("SELECT * FROM {}").format(
-                    sql.Identifier(parent_schema, parent_name))
+                    sql.SQL(parent_name))
 
             parent_data = self.select(cmd)
 
             if not parent_data.empty:
                 df.set_index(
-                    foreign_key['child_column'].to_list(), inplace=True)
+                    foreign_key["child_column"].to_list(), inplace=True)
                 parent_data.set_index(
-                    foreign_key['parent_column'].to_list(), inplace=True)
-
+                    foreign_key["parent_column"].to_list(), inplace=True)
                 # remove rows which are not in parent index
                 df = df[df.index.isin(parent_data.index)]
                 # reset index and sort columns
                 df = df.reset_index(
-                    level=foreign_key['child_column'].to_list())
+                    level=foreign_key["child_column"].to_list())
                 df = df[data.columns]
             else:
                 df = pd.DataFrame()
-
         return df
 
-    def _table_columns(
+    def encode_category(
             self,
-            table_name: str,
-            schema: str
+            data: pd.DataFrame,
+            category: str,
+            key: str,
+            category_table: str,
+            category_name: Optional[str] = None,
+            key_name: Optional[str] = None
     ) -> pd.DataFrame:
+        """Encode categorical column.
+
+        Implements writing of all the unique values in categorical column
+        given by ``category_name`` to the table given by ``category_table``.
+
+        Replaces all the values in ``category`` column in the original
+        DataFrame with the corresponding integer values assigned to categories
+        via serial primary key constraint.
+
+        Args:
+            data:
+                Pandas.DataFrame with categorical column.
+            category:
+                Name of the categorical column in DataFrame
+                the method is applied for.
+            key:
+                Name of the DataFrame column with encoded values.
+            category_table:
+                Name of the table with stored categories.
+            category_name:
+                Name of the categorical column in ``category_table``.
+                Defaults to ``category``.
+            key_name:
+                Name of the column in ``category_table`` contained
+                the encoded values. Defaults to ``key``.
+
+        Returns:
+            Pandas.DataFrame with encoded category.
+        """
+
+        if category_name is None:
+            category_name = category
+        if key_name is None:
+            key_name = key
+
+        data[category] = data[category].str.replace(",", "")
+        cat = data[[category]].drop_duplicates()
+        cat.rename(columns={category: category_name}, inplace=True)
+
+        table_data = self.select(
+            sql.SQL("SELECT DISTINCT {} FROM {}").format(
+                sql.SQL(category_name), sql.SQL(category_table)))
+
+        if not table_data.empty:
+            cat = cat[~cat[category_name].isin(
+                table_data[category_name].tolist())]
+
+        if len(cat) > 0:
+            self.copy_from(category_table, cat, format_data=True)
+
+        cmd = sql.SQL("SELECT {} AS {}, {} AS {} FROM {}").format(
+            sql.Identifier(key_name), sql.Identifier(key),
+            sql.Identifier(category_name), sql.Identifier(category),
+            sql.SQL(category_table))
+
+        df = self.select(cmd)
+        data[key] = data[category].map(df.set_index(category)[key].to_dict())
+        return data
+
+    def _table_columns(self, table_name: str) -> pd.DataFrame:
         """Return columns attributes of the given table.
 
         Args:
             table_name:
                 Name of the table.
-            schema:
-                Name of the schema.
 
         Returns:
             Pandas.DataFrame with the names and data types of all
             the columns of the given table.
         """
 
-        return self.select(queries.column_names(table_name, schema))
-
-    def _primary_key(
-            self,
-            table_name: str,
-            schema: str
-    ) -> pd.DataFrame:
-        """Return names of all the columns included to the primary key.
-
-        Args:
-            table_name:
-                Name of the table.
-            schema:
-                Name of the schema.
-
-        Returns:
-            Pandas.DataFrame with the names and data types of all
-            the columns included to the primary key.
-        """
-
-        return self.select(queries.primary_key(table_name, schema))
-
-    def _foreign_key(
-            self,
-            table_name: str,
-            parent_name: str,
-            schema: str,
-            parent_schema: str
-    ) -> pd.DataFrame:
-        """Return names of all the columns included to the foreign key.
-
-        Args:
-            table_name:
-                Name of the child table.
-            parent_name:
-                Name of the parent table.
-            schema:
-                Name of the child schema.
-            parent_schema:
-                Name of the parent schema.
-
-        Returns:
-            Pandas.DataFrame with columns included to the foreign key.
-        """
-
-        return self.select(queries.foreign_key(
-            table_name, schema, parent_name, parent_schema))
+        _schema, _table_name = self._get_schema(table_name)
+        return self.select(queries.column_names(_table_name, _schema))
 
     def _format_data(
             self,
             data: pd.DataFrame,
-            table_name: str,
-            schema: str
+            table_name: str
     ) -> pd.DataFrame:
         """Formatting DataFrame before applying COPY FROM.
         """
 
-        # names of the table columns from information schema
-        table_columns = self._table_columns(table_name, schema)
-
-        # intersection of DataFrame and table columns
+        table_columns = self._table_columns(table_name)
         columns = []  # type: List[str]
 
-        # adjust dtypes of DataFrame columns
         for row in table_columns.itertuples():
             column = row.column_name
 
             if column in data.columns:
                 columns += [column]
 
-                if row.data_type in ['smallint', 'integer', 'bigint']:
-                    if data[column].dtype == np.float:
-                        data[column] = data[column].round().astype('Int64')
-                elif row.data_type in ['text']:
+                if row.data_type in ["smallint", "integer", "bigint"]:
+                    if data[column].dtype == np.float64:
+                        data[column] = data[column].round().astype("Int64")
+                elif row.data_type in ["text"]:
                     try:
-                        data[column] = data[column].str.replace(',', '')
+                        data[column] = data[column].str.replace(",", "")
                     except AttributeError:
                         continue
         return data[columns]
-
-    @staticmethod
-    def _table_name(
-            table_name: str,
-            schema: str
-    ) -> str:
-        """Join schema and table_name to single string.
-        """
-
-        if schema == 'public':
-            return table_name
-        else:
-            return schema + '.' + table_name

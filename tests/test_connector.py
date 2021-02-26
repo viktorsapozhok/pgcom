@@ -14,7 +14,7 @@ def test_connection():
 
 
 def test_connection_keywords():
-    _commuter = Commuter(**conn_params, sslmode='allow', schema='public')
+    _commuter = Commuter(**conn_params, sslmode="allow")
     with _commuter.connector.open_connection() as conn:
         assert conn is not None
     del _commuter
@@ -22,10 +22,8 @@ def test_connection_keywords():
 
 def test_connection_options():
     _commuter = Commuter(
-        **conn_params, sslmode='allow', schema='model',
-        options='-c log_connections=yes')
-    assert _commuter.connector._kwargs['options'] == \
-           '-c log_connections=yes --search_path=model'
+        **conn_params, sslmode="allow", options="-c log_connections=yes")
+    assert _commuter.connector._kwargs["options"] == "-c log_connections=yes"
     assert len(str(_commuter)) > 2
     del _commuter
 
@@ -64,7 +62,7 @@ def test_reconnect():
     with _commuter.connector.open_connection() as conn:
         assert conn is not None
 
-    with patch.object(Connector, 'ping', new=_ping):
+    with patch.object(Connector, "ping", new=_ping):
         with _commuter.connector.open_connection() as conn:
             assert conn is not None
 

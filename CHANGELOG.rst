@@ -1,6 +1,16 @@
 ChangeLog
 =========
 
+0.2.3 (2021-02-27)
+------------------
+
+* Deprecated ``schema`` parameter
+* Added :func:`~pgcom.commuter.Commuter.is_entry_exist` method
+* Added :func:`~pgcom.commuter.Commuter.delete_entry` method
+* Added :func:`~pgcom.commuter.Commuter.encode_category` method
+* Added :func:`~pgcom.commuter.Commuter.make_where` method
+* Updated :func:`~pgcom.commuter.Commuter.insert` method to support customized placeholders
+
 0.2.2 (2020-07-27)
 ------------------
 

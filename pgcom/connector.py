@@ -1,6 +1,4 @@
-__all__ = [
-    'Connector',
-]
+__all__ = ["Connector"]
 
 from contextlib import contextmanager
 import random
@@ -9,7 +7,6 @@ from typing import (
     Any,
     Iterator,
     Mapping,
-    Optional,
     Sequence,
     Union
 )
@@ -39,9 +36,6 @@ class Connector(BaseConnector):
             be reconnected.
         max_reconnects:
             The maximum amount of reconnects, defaults to 3.
-        schema:
-            If schema is specified,
-            then setting a connection to the schema only.
     """
 
     _pool: pool.SimpleConnectionPool
@@ -51,10 +45,9 @@ class Connector(BaseConnector):
             pool_size: int = 20,
             pre_ping: bool = False,
             max_reconnects: int = 3,
-            schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
-        super().__init__(schema, **kwargs)
+        super().__init__(**kwargs)
 
         self.pool_size = pool_size
         self.pre_ping = pre_ping
@@ -124,7 +117,7 @@ class Connector(BaseConnector):
 
         is_alive = False
         with conn.cursor() as cur:
-            cur.execute('SELECT 1')
+            cur.execute("SELECT 1")
             if cur.description is not None:
                 fetched = cur.fetchall()
                 try:

@@ -1,7 +1,7 @@
 from os import path
 from setuptools import setup
 
-version = '0.2.2'
+version = '0.2.3'
 
 root_dir = path.abspath(path.dirname(__file__))
 

@@ -1,12 +1,12 @@
 __all__ = [
-    'primary_key',
-    'foreign_key',
-    'is_table_exist',
-    'column_names'
+    "primary_key",
+    "foreign_key",
+    "is_table_exist",
+    "column_names"
 ]
 
 
-def primary_key(table_name: str, schema: str) -> str:
+def primary_key(table_name: str) -> str:
     """Return column names of the primary key.
     """
 
@@ -22,7 +22,7 @@ def primary_key(table_name: str, schema: str) -> str:
         a.attrelid = i.indrelid AND
         a.attnum = ANY(i.indkey)
     WHERE
-        i.indrelid = '{schema}.{table_name}'::regclass AND
+        i.indrelid = '{table_name}'::regclass AND
         i.indisprimary
     """
 
@@ -107,4 +107,4 @@ def conn_count() -> str:
     """Return amount of active connections to database.
     """
 
-    return 'SELECT SUM(numbackends) FROM pg_stat_database'
+    return "SELECT SUM(numbackends) FROM pg_stat_database"

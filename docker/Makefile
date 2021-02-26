@@ -20,7 +20,7 @@ PSQL = psql -h postgresql -p 5432 -U postgres
 help:
 	@head -13 Makefile
 
-all: build test clean prune
+all: build test clean
 
 rebuild:
 	$(DOCKER_COMPOSE) build --no-cache pgcom
@@ -30,6 +30,7 @@ build:
 
 service:
 	$(DOCKER_COMPOSE) up -V -d postgresql
+	sleep 3
 	$(DOCKER_COMPOSE) run pgcom $(PSQL) -c "CREATE DATABASE test"
 	$(DOCKER_COMPOSE) run pgcom $(PSQL) -d test -c "CREATE SCHEMA model"
 

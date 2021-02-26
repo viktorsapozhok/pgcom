@@ -107,6 +107,46 @@ you can use :func:`~pgcom.commuter.Commuter.resolve_primary_conflicts` and :func
     Be careful when resolving conflicts on DataFrame. Since both methods query data from the table,
     the whole table will be queried if you don't specify ``where`` parameter.
 
+Encode categorical columns
+--------------------------
+
+If DataFrame contains a column with string categories which you want to place in a separate table
+with a serial primary key. And you want to replace categories with the corresponding key value, to
+minimize the original table size, you can use ``encode_category`` method.
+
+It implements writing of all the unique values in categorical column given by ``category_name``
+to the table given by parameter ``category_table``.
+
+In the example below, we have a DataFrame with a categorical column ``city``. We store it in
+a separate table called ``cities``. And replace column with the corresponding ``city_id``.
+
+.. code-block:: python
+
+    >>> df
+         city  year
+    0  Berlin  2010
+    1  Berlin  2011
+    2  London  2015
+    3   Paris  2012
+    4  Berlin  2018
+
+    >>> commuter.execute("CREATE TABLE cities (city_id SERIAL PRIMARY KEY, city TEXT)")
+    >>> df = commuter.encode_category(
+    ...     data=df, category="city", key="city_id", category_table="cities")
+    >>> df
+         city  year  city_id
+    0  Berlin  2010        1
+    1  Berlin  2011        1
+    2  London  2015        2
+    3   Paris  2012        3
+    4  Berlin  2018        1
+
+    >>> commuter.select("SELECT * FROM cities")
+       city_id    city
+    0        1  Berlin
+    1        2  London
+    2        3   Paris
+
 Connection options
 ------------------
 
@@ -169,6 +209,23 @@ Check if the table exists.
 .. code-block:: python
 
     >>> commuter.is_table_exist("test")
+    True
+
+Check if the specific entry exists in the table. It implements a simple query
+building a WHERE clause from kwargs.
+
+.. code-block:: python
+
+    # SELECT 1 FROM TABLE test WHERE id=5 AND num=500
+    >>> commuter.is_entry_exist("test", id=5, num=500)
+    True
+
+Delete entry from the table, specifying a WHERE clause using kwargs.
+
+.. code-block:: python
+
+    # DELETE FROM TABLE test WHERE id=5 AND num=500
+    >>> commuter.delete_entry("test", id=5, num=500)
     True
 
 Return the number of active connections to the database.

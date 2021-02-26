@@ -11,8 +11,9 @@ services:
     environment:
       - PGPASSWORD=postgres
     command: ["tail", "-f", "/dev/null"]
+
   postgresql:
-    image: postgres:12
+    image: library/postgres:latest
     container_name: pgcom
     environment:
       - POSTGRES_HOST=postgresql

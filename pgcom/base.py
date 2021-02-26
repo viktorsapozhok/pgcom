@@ -1,6 +1,6 @@
 __all__ = [
-    'BaseConnector',
-    'BaseCommuter',
+    "BaseConnector",
+    "BaseCommuter",
 ]
 
 from contextlib import contextmanager
@@ -32,38 +32,23 @@ register_adapter(np.float64, AsIs)
 
 class BaseConnector(abc.ABC):
     """Base class for all connectors.
-
-    Args:
-        schema:
-            If schema is specified,
-            then setting a connection to the schema only.
     """
 
-    def __init__(self, schema: Optional[str] = None, **kwargs: str) -> None:
-        self.schema = schema
+    def __init__(self, **kwargs: str) -> None:
         self._kwargs = kwargs
 
-        if 'db_name' in self._kwargs:
-            self._kwargs['dbname'] = self._kwargs.pop('db_name')
-
-        if self.schema is not None:
-            if 'options' in self._kwargs:
-                self._kwargs['options'] += f' --search_path={self.schema}'
-            else:
-                self._kwargs['options'] = f'--search_path={self.schema}'
+        if "db_name" in self._kwargs:
+            self._kwargs["dbname"] = self._kwargs.pop("db_name")
 
     def __del__(self) -> None:
         self.close_all()
 
     def __repr__(self) -> str:
-        desc = '('
-        for key in ['host', 'user', 'dbname']:
+        desc = "("
+        for key in ["host", "user", "dbname"]:
             if key in self._kwargs.keys():
-                desc += key + '=' + self._kwargs[key] + ' '
-        if self.schema is not None:
-            desc += 'schema=' + self.schema + ')'
-        else:
-            desc += 'schema=None)'
+                desc += key + "=" + self._kwargs[key] + " "
+        desc += ")"
         return desc
 
     @abc.abstractmethod
@@ -173,34 +158,22 @@ class BaseCommuter:
                 except Exception as ex:
                     exc.raise_with_traceback(
                         exc.QueryExecutionError(
-                            f'Execution failed on sql: {cmd}\n{ex}\n '
-                            f'unable to rollback'))
+                            f"Execution failed on sql: {cmd}\n{ex}\n "
+                            f"unable to rollback"))
 
                 exc.raise_with_traceback(
                     exc.QueryExecutionError(
-                        f'Execution failed on sql: {cmd}\n{e}\n'))
+                        f"Execution failed on sql: {cmd}\n{e}\n"))
 
         return fetched, columns
 
-    def _get_schema(
-            self,
-            table_name: str,
-            schema: Optional[str] = None
-    ) -> Tuple[str, str]:
-        """Return schema and table names.
+    def _get_schema(self, table_name: str) -> Tuple[str, str]:
+        """Return schema and table name.
         """
 
-        names = str.split(table_name, '.')
+        names = str.split(table_name, ".")
 
         if len(names) == 2:
             return names[0], names[1]
-
-        if schema is not None:
-            _schema = schema
         else:
-            if self.connector.schema is not None:
-                _schema = self.connector.schema
-            else:
-                _schema = 'public'
-
-        return _schema, table_name
+            return "public", table_name

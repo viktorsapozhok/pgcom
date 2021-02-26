@@ -1,6 +1,4 @@
-__all__ = [
-    'Listener'
-]
+__all__ = ["Listener"]
 
 import logging
 from select import select
@@ -14,9 +12,8 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from .base import BaseCommuter
 from .connector import Connector
-from .commuter import fix_schema
 
-logger = logging.getLogger('pgcom')
+logger = logging.getLogger("pgcom")
 
 
 class Listener(BaseCommuter):
@@ -45,9 +42,6 @@ class Listener(BaseCommuter):
             be reconnected.
         max_reconnects:
             The maximum amount of reconnects, defaults to 3.
-        schema:
-            If schema is specified,
-            then setting a connection to the schema only.
     """
 
     def __init__(
@@ -55,11 +49,10 @@ class Listener(BaseCommuter):
             pool_size: int = 20,
             pre_ping: bool = False,
             max_reconnects: int = 3,
-            schema: Optional[str] = None,
             **kwargs: str
     ) -> None:
         super().__init__(
-            Connector(pool_size, pre_ping, max_reconnects, schema, **kwargs))
+            Connector(pool_size, pre_ping, max_reconnects, **kwargs))
 
     def poll(
             self,
@@ -94,7 +87,7 @@ class Listener(BaseCommuter):
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
             with conn.cursor() as cur:
-                cur.execute(f'LISTEN {channel}')
+                cur.execute(f"LISTEN {channel}")
 
                 try:
                     while 1:
@@ -107,7 +100,7 @@ class Listener(BaseCommuter):
                                 notify = conn.notifies.pop(0)
                                 self._callback(on_notify, notify.payload)
                 except (Exception, KeyboardInterrupt, SystemExit) as e:
-                    cur.execute(f'UNLISTEN {channel}')
+                    cur.execute(f"UNLISTEN {channel}")
 
                     if (isinstance(e, KeyboardInterrupt) or
                         isinstance(e, SystemExit)):  # noqa: E129
@@ -118,8 +111,7 @@ class Listener(BaseCommuter):
     def create_notify_function(
             self,
             func_name: str,
-            channel: str,
-            schema: str = 'public'
+            channel: str
     ) -> None:
         """Create a function called by trigger.
 
@@ -131,12 +123,12 @@ class Listener(BaseCommuter):
                 Name of the function.
             channel:
                 Name of the the channel the notification is sending to.
-            schema:
-                If not specified, then the public schema is used.
         """
 
+        _schema, _func_name = self._get_schema(func_name)
+
         self.execute(f"""
-            CREATE OR REPLACE FUNCTION {schema}.{func_name}()
+            CREATE OR REPLACE FUNCTION {_schema}.{_func_name}()
                 RETURNS trigger
             LANGUAGE plpgsql
                 AS $function$
@@ -147,16 +139,14 @@ class Listener(BaseCommuter):
             $function$
             """)
 
-    @fix_schema
     def create_trigger(
             self,
             table_name: str,
             func_name: str,
-            schema: str = 'public',
             trigger_name: Optional[str] = None,
-            when: str = 'AFTER',
-            event: str = 'INSERT',
-            for_each: str = 'STATEMENT'
+            when: str = "AFTER",
+            event: str = "INSERT",
+            for_each: str = "STATEMENT"
     ) -> None:
         """Create trigger.
 
@@ -169,8 +159,6 @@ class Listener(BaseCommuter):
             func_name:
                 A user-supplied function, which is executed when the
                 trigger fires.
-            schema:
-                If not specified, then the public schema is used.
             trigger_name:
                 The name to give to the new trigger. If not specified, then
                 the automatically created name will be assigned.
@@ -186,20 +174,22 @@ class Listener(BaseCommuter):
                 event, or just once per SQL statement.
         """
 
+        _schema, _table_name = self._get_schema(table_name)
+
         if trigger_name is None:
             trigger_name = str.lower(
-                table_name + '_' + event.replace(' ', '_'))
+                _table_name + "_" + event.replace(" ", "_"))
 
         self.execute(f"""
             DROP TRIGGER IF EXISTS {trigger_name}
-            ON {schema}.{table_name}
-            """)
+            ON {_schema}.{_table_name}
+        """)
 
         cmd = f"""
         CREATE TRIGGER {trigger_name} {when} {event}
-            ON {schema}.{table_name}
+            ON {_schema}.{_table_name}
             FOR EACH {for_each}
-            EXECUTE FUNCTION {schema}.{func_name}()
+            EXECUTE FUNCTION {_schema}.{func_name}()
         """
 
         self.execute(cmd)
@@ -210,4 +200,4 @@ class Listener(BaseCommuter):
             try:
                 callback(*args)
             except Exception as e:
-                logger.error(f'error from callback {callback}: {e}')
+                logger.error(f"error from callback {callback}: {e}")
