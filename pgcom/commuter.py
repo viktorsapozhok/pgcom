@@ -167,8 +167,11 @@ class Commuter(BaseCommuter):
 
         if columns is None:
             columns = list(data.columns)
+
         if placeholders is None:
             placeholders = sql.Placeholder() * len(columns)
+        else:
+            placeholders = sql.Composed([sql.SQL(p) for p in placeholders])
 
         cmd = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
             sql.SQL(table_name),

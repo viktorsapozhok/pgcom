@@ -363,3 +363,14 @@ def test_encode_category():
         category_name="category")
 
     assert data["category_id"].to_list() == [2, 3, 1]
+
+
+@with_table("model.test_table", create_test_table)
+def test_custom_placeholders():
+    data = create_test_data()
+    placeholders = ["%s" for col in data.columns if col in ["var_2", "var_3"]]
+    commuter.insert(
+        "model.test_table", data,
+        columns=["var_2", "var_3"], placeholders=placeholders)
+    df = commuter.select("select * from model.test_table")
+    assert df["var_2"].to_list() == [1, 2, 3]

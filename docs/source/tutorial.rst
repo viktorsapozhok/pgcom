@@ -204,6 +204,14 @@ insert one row and return the serial ID assigned to it.
 
     >>> row_id = commuter.insert_row("test", return_id="id", num=500, data="abc'def")
 
+Insert rows using custom placeholders, e.g. to insert PostGIS data.
+
+.. code-block:: python
+
+    >>> commuter.insert("test", data,
+    ...     columns=["name", "geom"],
+    ...     placeholders=["%s", "ST_GeomFromText(%s, 4326)"])
+
 Check if the table exists.
 
 .. code-block:: python
