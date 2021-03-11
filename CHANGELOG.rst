@@ -1,6 +1,13 @@
 ChangeLog
 =========
 
+0.2.5 (2021-03-11)
+------------------
+
+* Fixed `#17 <https://github.com/viktorsapozhok/pgcom/issues/17>`_
+* Fixed `#18 <https://github.com/viktorsapozhok/pgcom/issues/18>`_
+* Fixed `#19 <https://github.com/viktorsapozhok/pgcom/issues/19>`_
+
 0.2.4 (2021-02-28)
 ------------------
 

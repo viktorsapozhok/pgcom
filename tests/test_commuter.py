@@ -366,6 +366,21 @@ def test_encode_category():
 
 
 @with_table("model.test_table", create_test_table)
+@with_table("model.category_table", create_category_table)
+def test_encode_missing():
+    data = pd.DataFrame({"var_2": [1, 2, 3], "var_3": ["xxx", None, "xxx"]})
+    commuter.insert("model.test_table", data=data)
+    data = commuter.encode_category(
+        data=data,
+        category="var_3",
+        key="category_id",
+        category_table="model.category_table",
+        category_name="category",
+        na_value="None")
+    assert data["category_id"].to_list() == [1, 2, 1]
+
+
+@with_table("model.test_table", create_test_table)
 def test_custom_placeholders():
     data = create_test_data()
     placeholders = ["%s" for col in data.columns if col in ["var_2", "var_3"]]
@@ -374,3 +389,27 @@ def test_custom_placeholders():
         columns=["var_2", "var_3"], placeholders=placeholders)
     df = commuter.select("select * from model.test_table")
     assert df["var_2"].to_list() == [1, 2, 3]
+
+
+@with_table("model.test_table", create_test_table)
+def test_copy_with_custom_sep():
+    data = create_test_data()
+    data["var_3"] = ["x", "xx", "x,x,x"]
+    commuter.copy_from("model.test_table", data, format_data=True, sep=";")
+    df = commuter.select("select * from model.test_table")
+    assert df["var_3"].to_list() == ["x", "xx", "x,x,x"]
+
+    data["var_3"] = ["x", "xx", "x;x,x"]
+    commuter.copy_from("model.test_table", data,
+                       format_data=True, sep="|", where="var_2 > 0")
+    df = commuter.select("select * from model.test_table")
+    assert df["var_3"].to_list() == ["x", "xx", "x;x,x"]
+
+
+@with_table("model.test_table", create_test_table)
+def test_insert_missing():
+    data = create_test_data()
+    data["var_5"] = [1, 2, None]
+    commuter.insert("model.test_table", data)
+    df = commuter.select("select * from model.test_table")
+    assert df["var_5"].isnull().sum() == 1

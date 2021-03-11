@@ -178,7 +178,9 @@ class Commuter(BaseCommuter):
             sql.SQL(', ').join(map(sql.Identifier, columns)),
             sql.SQL(', ').join(placeholders))
 
-        for values in [tuple(row) for row in data[columns].to_numpy()]:
+        rows = data[columns].to_numpy(na_value=None)
+
+        for values in [tuple(row) for row in rows]:
             self._execute(cmd=cmd, values=values)
 
     def insert_row(
@@ -250,7 +252,9 @@ class Commuter(BaseCommuter):
             table_name: str,
             data: pd.DataFrame,
             format_data: bool = False,
-            where: Optional[Union[str, sql.Composed]] = None
+            sep: str = ",",
+            na_value: str = "",
+            where: Optional[Union[str, sql.Composed]] = None,
     ) -> None:
         """Places DataFrame to a buffer and apply COPY FROM command.
 
@@ -262,6 +266,11 @@ class Commuter(BaseCommuter):
             format_data:
                 Reorder columns and adjust dtypes wrt to table metadata
                 from information_schema.
+            sep:
+                String of length 1. Field delimiter for the output file.
+                Defaults to ",".
+            na_value:
+                Missing data representation, defaults to "".
             where:
                 WHERE clause used to specify a condition while deleting
                 data from the table before applying copy_from,
@@ -274,7 +283,7 @@ class Commuter(BaseCommuter):
         df = data.copy()
 
         if format_data:
-            df = self._format_data(df, table_name)
+            df = self._format_data(df, table_name, sep=sep)
 
         with self.connector.open_connection() as conn:
             try:
@@ -287,18 +296,16 @@ class Commuter(BaseCommuter):
                                 sql.SQL(table_name)),
                             where])
                         cur.execute(cmd)
-
                     # DataFrame to buffer
                     s_buf = StringIO()
-                    df.to_csv(s_buf, index=False, header=False)
+                    df.to_csv(
+                        path_or_buf=s_buf, sep=sep, na_rep=na_value,
+                        index=False, header=False)
                     s_buf.seek(0)
-
+                    # copy from buffer
                     cur.copy_from(
-                        file=s_buf,
-                        table=table_name,
-                        sep=",",
-                        null="",
-                        columns=df.columns)
+                        file=s_buf, table=table_name, sep=sep,
+                        null=na_value, columns=df.columns)
                 conn.commit()
             except Exception as e:
                 try:
@@ -528,7 +535,8 @@ class Commuter(BaseCommuter):
             key: str,
             category_table: str,
             category_name: Optional[str] = None,
-            key_name: Optional[str] = None
+            key_name: Optional[str] = None,
+            na_value: Optional[str] = None
     ) -> pd.DataFrame:
         """Encode categorical column.
 
@@ -555,6 +563,8 @@ class Commuter(BaseCommuter):
             key_name:
                 Name of the column in ``category_table`` contained
                 the encoded values. Defaults to ``key``.
+            na_value:
+                Missing data representation.
 
         Returns:
             Pandas.DataFrame with encoded category.
@@ -564,6 +574,8 @@ class Commuter(BaseCommuter):
             category_name = category
         if key_name is None:
             key_name = key
+        if na_value is not None:
+            data[category] = data[category].fillna(na_value)
 
         data[category] = data[category].str.replace(",", "")
         cat = data[[category]].drop_duplicates()
@@ -607,7 +619,8 @@ class Commuter(BaseCommuter):
     def _format_data(
             self,
             data: pd.DataFrame,
-            table_name: str
+            table_name: str,
+            sep: str = ","
     ) -> pd.DataFrame:
         """Formatting DataFrame before applying COPY FROM.
         """
@@ -626,7 +639,7 @@ class Commuter(BaseCommuter):
                         data[column] = data[column].round().astype("Int64")
                 elif row.data_type in ["text"]:
                     try:
-                        data[column] = data[column].str.replace(",", "")
+                        data[column] = data[column].str.replace(sep, "")
                     except AttributeError:
                         continue
         return data[columns]
