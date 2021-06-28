@@ -9,6 +9,10 @@ RUN apt-get update && \
 # create user
 RUN useradd --create-home --shell /bin/bash user
 
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r ./requirements.txt \
+    && rm -f requirements.txt
+
 # create working directory
 RUN mkdir home/user/pgcom
 ADD . home/user/pgcom

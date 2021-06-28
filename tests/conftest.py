@@ -7,11 +7,11 @@ from pgcom import Commuter
 
 class ConnParams:
     def __init__(self):
-        self.host = 'postgresql'
-        self.port = '5432'
-        self.user = 'postgres'
-        self.password = 'postgres'
-        self.dbname = 'test'
+        self.host = "postgresql"
+        self.port = "5432"
+        self.user = "postgres"
+        self.password = "postgres"
+        self.dbname = "test"
 
     def get(self):
         return self.__dict__
@@ -24,8 +24,8 @@ commuter = Commuter(**conn_params)
 def delete_table(table_name):
     if commuter.is_table_exist(table_name):
         commuter.execute(
-            sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(
-                sql.SQL(table_name)))
+            sql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(sql.SQL(table_name))
+        )
 
 
 def with_table(table_name, create_callback, *create_args):
@@ -41,5 +41,7 @@ def with_table(table_name, create_callback, *create_args):
                 assert False
             finally:
                 delete_table(table_name)
+
         return wrapped
+
     return decorator

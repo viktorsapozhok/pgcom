@@ -3,13 +3,7 @@ __all__ = ["Connector"]
 from contextlib import contextmanager
 import random
 import time
-from typing import (
-    Any,
-    Iterator,
-    Mapping,
-    Sequence,
-    Union
-)
+from typing import Any, Iterator, Mapping, Sequence, Union
 
 import psycopg2
 from psycopg2 import pool
@@ -41,11 +35,11 @@ class Connector(BaseConnector):
     _pool: pool.SimpleConnectionPool
 
     def __init__(
-            self,
-            pool_size: int = 20,
-            pre_ping: bool = False,
-            max_reconnects: int = 3,
-            **kwargs: str
+        self,
+        pool_size: int = 20,
+        pre_ping: bool = False,
+        max_reconnects: int = 3,
+        **kwargs: str
     ) -> None:
         super().__init__(**kwargs)
 
@@ -80,15 +74,13 @@ class Connector(BaseConnector):
             self._pool.putconn(conn)
 
     def restart_pool(self) -> pool.SimpleConnectionPool:
-        """Close all the connections and create a new pool.
-        """
+        """Close all the connections and create a new pool."""
 
         self.close_all()
         return self.make_pool()
 
     def close_all(self) -> None:
-        """Close all the connections handled by the pool.
-        """
+        """Close all the connections handled by the pool."""
 
         if not self._pool.closed:
             self._pool.closeall()
@@ -101,7 +93,8 @@ class Connector(BaseConnector):
         """
 
         return pool.SimpleConnectionPool(
-            minconn=1, maxconn=self.pool_size, **self._kwargs)
+            minconn=1, maxconn=self.pool_size, **self._kwargs
+        )
 
     @staticmethod
     def ping(conn: psycopg2.connect) -> bool:

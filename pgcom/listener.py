@@ -45,23 +45,22 @@ class Listener(BaseCommuter):
     """
 
     def __init__(
-            self,
-            pool_size: int = 20,
-            pre_ping: bool = False,
-            max_reconnects: int = 3,
-            **kwargs: str
+        self,
+        pool_size: int = 20,
+        pre_ping: bool = False,
+        max_reconnects: int = 3,
+        **kwargs: str,
     ) -> None:
-        super().__init__(
-            Connector(pool_size, pre_ping, max_reconnects, **kwargs))
+        super().__init__(Connector(pool_size, pre_ping, max_reconnects, **kwargs))
 
     def poll(
-            self,
-            channel: str,
-            on_notify: Optional[Callable[[str], None]] = None,
-            on_timeout: Optional[Callable] = None,
-            on_close: Optional[Callable] = None,
-            on_error: Optional[Callable[[Exception], None]] = None,
-            timeout: int = 5
+        self,
+        channel: str,
+        on_notify: Optional[Callable[[str], None]] = None,
+        on_timeout: Optional[Callable] = None,
+        on_close: Optional[Callable] = None,
+        on_error: Optional[Callable[[Exception], None]] = None,
+        timeout: int = 5,
     ) -> None:
         """Listen to the channel and activate callbacks on the notification.
 
@@ -102,17 +101,14 @@ class Listener(BaseCommuter):
                 except (Exception, KeyboardInterrupt, SystemExit) as e:
                     cur.execute(f"UNLISTEN {channel}")
 
-                    if (isinstance(e, KeyboardInterrupt) or
-                        isinstance(e, SystemExit)):  # noqa: E129
+                    if isinstance(e, KeyboardInterrupt) or isinstance(
+                        e, SystemExit
+                    ):  # noqa: E129
                         self._callback(on_close)
                     else:
                         self._callback(on_error, e)
 
-    def create_notify_function(
-            self,
-            func_name: str,
-            channel: str
-    ) -> None:
+    def create_notify_function(self, func_name: str, channel: str) -> None:
         """Create a function called by trigger.
 
         This function generates a notification, which is sending
@@ -127,7 +123,8 @@ class Listener(BaseCommuter):
 
         _schema, _func_name = self._get_schema(func_name)
 
-        self.execute(f"""
+        self.execute(
+            f"""
             CREATE OR REPLACE FUNCTION {_schema}.{_func_name}()
                 RETURNS trigger
             LANGUAGE plpgsql
@@ -137,16 +134,17 @@ class Listener(BaseCommuter):
                 RETURN NEW;
             END;
             $function$
-            """)
+            """
+        )
 
     def create_trigger(
-            self,
-            table_name: str,
-            func_name: str,
-            trigger_name: Optional[str] = None,
-            when: str = "AFTER",
-            event: str = "INSERT",
-            for_each: str = "STATEMENT"
+        self,
+        table_name: str,
+        func_name: str,
+        trigger_name: Optional[str] = None,
+        when: str = "AFTER",
+        event: str = "INSERT",
+        for_each: str = "STATEMENT",
     ) -> None:
         """Create trigger.
 
@@ -177,13 +175,14 @@ class Listener(BaseCommuter):
         _schema, _table_name = self._get_schema(table_name)
 
         if trigger_name is None:
-            trigger_name = str.lower(
-                _table_name + "_" + event.replace(" ", "_"))
+            trigger_name = str.lower(_table_name + "_" + event.replace(" ", "_"))
 
-        self.execute(f"""
+        self.execute(
+            f"""
             DROP TRIGGER IF EXISTS {trigger_name}
             ON {_schema}.{_table_name}
-        """)
+        """
+        )
 
         cmd = f"""
         CREATE TRIGGER {trigger_name} {when} {event}

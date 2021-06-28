@@ -4,16 +4,7 @@ __all__ = [
 ]
 
 from contextlib import contextmanager
-from typing import (
-    Any,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union
-)
+from typing import Any, Iterator, List, Mapping, Optional, Sequence, Tuple, Union
 
 import abc
 
@@ -31,8 +22,7 @@ register_adapter(np.float64, AsIs)
 
 
 class BaseConnector(abc.ABC):
-    """Base class for all connectors.
-    """
+    """Base class for all connectors."""
 
     def __init__(self, **kwargs: str) -> None:
         self._kwargs = kwargs
@@ -54,15 +44,13 @@ class BaseConnector(abc.ABC):
     @abc.abstractmethod
     @contextmanager
     def open_connection(self) -> Iterator[psycopg2.connect]:
-        """Generates a new connection.
-        """
+        """Generates a new connection."""
 
         raise NotImplementedError
 
     @abc.abstractmethod
     def close_all(self) -> None:
-        """Close all active connections.
-        """
+        """Close all active connections."""
 
         raise NotImplementedError
 
@@ -83,9 +71,7 @@ class BaseCommuter:
         return repr(self.connector)
 
     def execute(
-            self,
-            cmd: Union[str, sql.Composed],
-            values: Optional[QueryParams] = None
+        self, cmd: Union[str, sql.Composed], values: Optional[QueryParams] = None
     ) -> None:
         """Execute a database operation (query or command).
 
@@ -106,11 +92,11 @@ class BaseCommuter:
         self._execute(cmd=cmd, values=values)
 
     def _execute(
-            self,
-            cmd: Union[str, sql.Composed],
-            values: Optional[QueryParams] = None,
-            commit: Optional[bool] = True,
-            batch: Optional[bool] = False
+        self,
+        cmd: Union[str, sql.Composed],
+        values: Optional[QueryParams] = None,
+        commit: Optional[bool] = True,
+        batch: Optional[bool] = False,
     ) -> Tuple[List[Any], List[str]]:
         """Execute a database operation, query or command.
 
@@ -159,17 +145,18 @@ class BaseCommuter:
                     exc.raise_with_traceback(
                         exc.QueryExecutionError(
                             f"Execution failed on sql: {cmd}\n{ex}\n "
-                            f"unable to rollback"))
+                            f"unable to rollback"
+                        )
+                    )
 
                 exc.raise_with_traceback(
-                    exc.QueryExecutionError(
-                        f"Execution failed on sql: {cmd}\n{e}\n"))
+                    exc.QueryExecutionError(f"Execution failed on sql: {cmd}\n{e}\n")
+                )
 
         return fetched, columns
 
     def _get_schema(self, table_name: str) -> Tuple[str, str]:
-        """Return schema and table name.
-        """
+        """Return schema and table name."""
 
         names = str.split(table_name, ".")
 

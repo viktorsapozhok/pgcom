@@ -1,14 +1,8 @@
-__all__ = [
-    "primary_key",
-    "foreign_key",
-    "is_table_exist",
-    "column_names"
-]
+__all__ = ["primary_key", "foreign_key", "is_table_exist", "column_names"]
 
 
 def primary_key(table_name: str) -> str:
-    """Return column names of the primary key.
-    """
+    """Return column names of the primary key."""
 
     return f"""
     SELECT
@@ -28,13 +22,9 @@ def primary_key(table_name: str) -> str:
 
 
 def foreign_key(
-        table_name: str,
-        schema: str,
-        parent_name: str,
-        parent_schema: str
+    table_name: str, schema: str, parent_name: str, parent_schema: str
 ) -> str:
-    """Return column names (child and parent) of the foreign key.
-    """
+    """Return column names (child and parent) of the foreign key."""
 
     return f"""
     SELECT
@@ -71,8 +61,7 @@ def foreign_key(
 
 
 def is_table_exist(table_name: str, schema: str) -> str:
-    """Return table name if it exists in database.
-    """
+    """Return table name if it exists in database."""
 
     return f"""
     SELECT
@@ -87,8 +76,7 @@ def is_table_exist(table_name: str, schema: str) -> str:
 
 
 def column_names(table_name: str, schema: str) -> str:
-    """Return column names of the given table.
-    """
+    """Return column names of the given table."""
 
     return f"""
     SELECT
@@ -104,7 +92,6 @@ def column_names(table_name: str, schema: str) -> str:
 
 
 def conn_count() -> str:
-    """Return amount of active connections to database.
-    """
+    """Return amount of active connections to database."""
 
     return "SELECT SUM(numbackends) FROM pg_stat_database"

@@ -6,8 +6,8 @@ services:
     container_name: pgcom
     user: user
     build:
-      context: ../
-      dockerfile: docker/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     environment:
       - PGPASSWORD=postgres
     command: ["tail", "-f", "/dev/null"]

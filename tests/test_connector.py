@@ -22,7 +22,8 @@ def test_connection_keywords():
 
 def test_connection_options():
     _commuter = Commuter(
-        **conn_params, sslmode="allow", options="-c log_connections=yes")
+        **conn_params, sslmode="allow", options="-c log_connections=yes"
+    )
     assert _commuter.connector._kwargs["options"] == "-c log_connections=yes"
     assert len(str(_commuter)) > 2
     del _commuter

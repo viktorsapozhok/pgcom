@@ -4,6 +4,8 @@
 [![pypi](https://img.shields.io/pypi/v/pgcom.svg)](https://pypi.python.org/pypi/pgcom)
 [![Documentation Status](https://readthedocs.org/projects/pgcom/badge/?version=latest)](https://pgcom.readthedocs.io/en/latest/?badge=latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 
 Communication manager for PostgreSQL database, provides a collection of convenience
 wrappers over Psycopg adapter to simplify the usage of basic Psycopg methods in conjunction

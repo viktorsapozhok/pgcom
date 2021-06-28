@@ -1,7 +1,7 @@
 from os import path
 from setuptools import setup
 
-version = '0.2.5'
+version = '0.2.6'
 
 root_dir = path.abspath(path.dirname(__file__))
 
@@ -19,6 +19,16 @@ version_path = path.join(root_dir, 'pgcom', 'version.py')
 with open(version_path, mode='w') as f:
     f.write('__version__ = "{}"\n'.format(version))
 
+
+def get_requirements():
+    r = []
+    with open("requirements.txt") as fp:
+        for line in fp.read().split("\n"):
+            if not line.startswith("#"):
+                r += [line.strip()]
+    return r
+
+
 setup(
     name='pgcom',
     version=version,
@@ -31,12 +41,9 @@ setup(
     packages=['pgcom'],
     include_package_data=True,
     zip_safe=False,
-    install_requires=[
-        'pandas>=1.1.0',
-        'psycopg2-binary>=2.7.7'
-    ],
+    install_requires=get_requirements(),
     extras_require={
-        'test': ['pytest', 'tox'],
+        'test': ['pytest', 'tox', 'black'],
         'docs': ['sphinx', 'sphinx_rtd_theme', 'sphinx-autodoc-typehints']
     },
     python_requires='>=3.7',

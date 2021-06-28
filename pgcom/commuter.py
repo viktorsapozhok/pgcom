@@ -1,14 +1,7 @@
 __all__ = ["Commuter"]
 
 from io import StringIO
-from typing import (
-    Any,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Union
-)
+from typing import Any, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -43,22 +36,19 @@ class Commuter(BaseCommuter):
     connector: Connector
 
     def __init__(
-            self,
-            pool_size: int = 20,
-            pre_ping: bool = False,
-            max_reconnects: int = 3,
-            **kwargs: str
+        self,
+        pool_size: int = 20,
+        pre_ping: bool = False,
+        max_reconnects: int = 3,
+        **kwargs: str,
     ) -> None:
-        super().__init__(
-            Connector(pool_size, pre_ping, max_reconnects, **kwargs))
+        super().__init__(Connector(pool_size, pre_ping, max_reconnects, **kwargs))
 
     def __repr__(self) -> str:
         return repr(self.connector)
 
     def select(
-            self,
-            cmd: Union[str, sql.Composed],
-            values: Optional[QueryParams] = None
+        self, cmd: Union[str, sql.Composed], values: Optional[QueryParams] = None
     ) -> pd.DataFrame:
         """Read SQL query into a DataFrame.
 
@@ -79,10 +69,10 @@ class Commuter(BaseCommuter):
         return df
 
     def select_one(
-            self,
-            cmd: Union[str, sql.Composed],
-            values: Optional[QueryParams] = None,
-            default: Optional[Any] = None
+        self,
+        cmd: Union[str, sql.Composed],
+        values: Optional[QueryParams] = None,
+        default: Optional[Any] = None,
     ) -> Any:
         """Select the first element of returned DataFrame.
 
@@ -121,11 +111,11 @@ class Commuter(BaseCommuter):
         self._execute(cmd=cmd)
 
     def insert(
-            self,
-            table_name: str,
-            data: pd.DataFrame,
-            columns: Optional[List[str]] = None,
-            placeholders: Optional[List[str]] = None
+        self,
+        table_name: str,
+        data: pd.DataFrame,
+        columns: Optional[List[str]] = None,
+        placeholders: Optional[List[str]] = None,
     ) -> None:
         """Write rows from a DataFrame to a database table.
 
@@ -175,8 +165,9 @@ class Commuter(BaseCommuter):
 
         cmd = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
             sql.SQL(table_name),
-            sql.SQL(', ').join(map(sql.Identifier, columns)),
-            sql.SQL(', ').join(placeholders))
+            sql.SQL(", ").join(map(sql.Identifier, columns)),
+            sql.SQL(", ").join(placeholders),
+        )
 
         rows = data[columns].to_numpy(na_value=None)
 
@@ -184,10 +175,7 @@ class Commuter(BaseCommuter):
             self._execute(cmd=cmd, values=values)
 
     def insert_row(
-            self,
-            table_name: str,
-            return_id: Optional[str] = None,
-            **kwargs: Any
+        self, table_name: str, return_id: Optional[str] = None, **kwargs: Any
     ) -> Optional[int]:
         """Implements insert command.
 
@@ -205,8 +193,9 @@ class Commuter(BaseCommuter):
 
         cmd = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
             sql.SQL(table_name),
-            sql.SQL(', ').join(map(sql.Identifier, keys)),
-            sql.SQL(', ').join(map(sql.Placeholder, keys)))
+            sql.SQL(", ").join(map(sql.Identifier, keys)),
+            sql.SQL(", ").join(map(sql.Placeholder, keys)),
+        )
 
         if return_id is not None:
             sid = self.insert_return(cmd, return_id=return_id, values=kwargs)
@@ -216,10 +205,10 @@ class Commuter(BaseCommuter):
         return sid
 
     def insert_return(
-            self,
-            cmd: Union[str, sql.Composed],
-            values: Optional[QueryParams] = None,
-            return_id: Optional[str] = None
+        self,
+        cmd: Union[str, sql.Composed],
+        values: Optional[QueryParams] = None,
+        return_id: Optional[str] = None,
     ) -> int:
         """Insert a new row to the table and
         return the serial key of the newly inserted row.
@@ -234,9 +223,12 @@ class Commuter(BaseCommuter):
         """
 
         if return_id is not None:
-            cmd = sql.Composed([
-                sql.SQL(cmd) if isinstance(cmd, str) else cmd,
-                sql.SQL(' RETURNING {}').format(sql.Identifier(return_id))])
+            cmd = sql.Composed(
+                [
+                    sql.SQL(cmd) if isinstance(cmd, str) else cmd,
+                    sql.SQL(" RETURNING {}").format(sql.Identifier(return_id)),
+                ]
+            )
 
         fetched, _ = self._execute(cmd, values)
 
@@ -248,13 +240,13 @@ class Commuter(BaseCommuter):
         return sid
 
     def copy_from(
-            self,
-            table_name: str,
-            data: pd.DataFrame,
-            format_data: bool = False,
-            sep: str = ",",
-            na_value: str = "",
-            where: Optional[Union[str, sql.Composed]] = None,
+        self,
+        table_name: str,
+        data: pd.DataFrame,
+        format_data: bool = False,
+        sep: str = ",",
+        na_value: str = "",
+        where: Optional[Union[str, sql.Composed]] = None,
     ) -> None:
         """Places DataFrame to a buffer and apply COPY FROM command.
 
@@ -291,28 +283,40 @@ class Commuter(BaseCommuter):
                     if where is not None:
                         if isinstance(where, str):
                             where = sql.SQL(where)
-                        cmd = sql.Composed([
-                            sql.SQL("DELETE FROM {} WHERE ").format(
-                                sql.SQL(table_name)),
-                            where])
+                        cmd = sql.Composed(
+                            [
+                                sql.SQL("DELETE FROM {} WHERE ").format(
+                                    sql.SQL(table_name)
+                                ),
+                                where,
+                            ]
+                        )
                         cur.execute(cmd)
                     # DataFrame to buffer
                     s_buf = StringIO()
                     df.to_csv(
-                        path_or_buf=s_buf, sep=sep, na_rep=na_value,
-                        index=False, header=False)
+                        path_or_buf=s_buf,
+                        sep=sep,
+                        na_rep=na_value,
+                        index=False,
+                        header=False,
+                    )
                     s_buf.seek(0)
                     # copy from buffer
-                    cur.copy_from(
-                        file=s_buf, table=table_name, sep=sep,
-                        null=na_value, columns=df.columns)
+                    columns = ", ".join(df.columns)
+                    cmd = (
+                        f"COPY {table_name} ({columns}) FROM STDOUT "
+                        f"DELIMITER '{sep}' NULL '{na_value}'"
+                    )
+                    cur.copy_expert(cmd, s_buf)
                 conn.commit()
             except Exception as e:
                 try:
                     conn.rollback()
                 except Exception as ex:
                     exc.raise_with_traceback(
-                        exc.CopyError(f"{ex}\n unable to rollback"))
+                        exc.CopyError(f"{ex}\n unable to rollback")
+                    )
 
                 exc.raise_with_traceback(exc.CopyError(f"{e}\n"))
 
@@ -350,8 +354,8 @@ class Commuter(BaseCommuter):
         """
 
         cmd = sql.SQL("SELECT 1 FROM {} WHERE {}").format(
-            sql.SQL(table_name),
-            self.make_where(list(kwargs.keys())))
+            sql.SQL(table_name), self.make_where(list(kwargs.keys()))
+        )
 
         res = self.select_one(cmd=cmd, values=kwargs, default=None)
         return res is not None
@@ -377,8 +381,8 @@ class Commuter(BaseCommuter):
         """
 
         cmd = sql.SQL("DELETE FROM {} WHERE {}").format(
-            sql.SQL(table_name),
-            self.make_where(list(kwargs.keys())))
+            sql.SQL(table_name), self.make_where(list(kwargs.keys()))
+        )
 
         self._execute(cmd, values=kwargs)
 
@@ -397,21 +401,20 @@ class Commuter(BaseCommuter):
         where = list()  # type: List[Union[sql.Composable]]
         for key in keys:
             if len(where) > 0:
-                where += [sql.SQL(' AND ')]
-            where += [sql.Identifier(key), sql.SQL('='), sql.Placeholder(key)]
+                where += [sql.SQL(" AND ")]
+            where += [sql.Identifier(key), sql.SQL("="), sql.Placeholder(key)]
         return sql.Composed(where)
 
     def get_connections_count(self) -> int:
-        """Returns the amount of active connections.
-        """
+        """Returns the amount of active connections."""
 
         return self.select_one(cmd=queries.conn_count(), default=0)
 
     def resolve_primary_conflicts(
-            self,
-            table_name: str,
-            data: pd.DataFrame,
-            where: Optional[Union[str, sql.Composed]] = None
+        self,
+        table_name: str,
+        data: pd.DataFrame,
+        where: Optional[Union[str, sql.Composed]] = None,
     ) -> pd.DataFrame:
         """Resolve primary key conflicts in DataFrame.
 
@@ -443,13 +446,14 @@ class Commuter(BaseCommuter):
             if where is not None:
                 if isinstance(where, str):
                     where = sql.SQL(where)
-                cmd = sql.Composed([
-                    sql.SQL("SELECT * FROM {} WHERE ").format(
-                        sql.SQL(table_name)),
-                    where])
+                cmd = sql.Composed(
+                    [
+                        sql.SQL("SELECT * FROM {} WHERE ").format(sql.SQL(table_name)),
+                        where,
+                    ]
+                )
             else:
-                cmd = sql.SQL("SELECT * FROM {}").format(
-                    sql.SQL(table_name))
+                cmd = sql.SQL("SELECT * FROM {}").format(sql.SQL(table_name))
 
             table_data = self.select(cmd)
 
@@ -464,11 +468,11 @@ class Commuter(BaseCommuter):
         return df
 
     def resolve_foreign_conflicts(
-            self,
-            table_name: str,
-            parent_name: str,
-            data: pd.DataFrame,
-            where: Optional[Union[str, sql.Composed]] = None
+        self,
+        table_name: str,
+        parent_name: str,
+        data: pd.DataFrame,
+        where: Optional[Union[str, sql.Composed]] = None,
     ) -> pd.DataFrame:
         """Resolve foreign key conflicts in DataFrame.
 
@@ -496,47 +500,48 @@ class Commuter(BaseCommuter):
         _schema, _table_name = self._get_schema(table_name)
         _parent_schema, _parent_name = self._get_schema(parent_name)
 
-        foreign_key = self.select(queries.foreign_key(
-            _table_name, _schema, _parent_name, _parent_schema))
+        foreign_key = self.select(
+            queries.foreign_key(_table_name, _schema, _parent_name, _parent_schema)
+        )
 
         if len(foreign_key) > 0:
             if where is not None:
                 if isinstance(where, str):
                     where = sql.SQL(where)
-                cmd = sql.Composed([
-                    sql.SQL("SELECT * FROM {} WHERE ").format(
-                        sql.SQL(parent_name)),
-                    where])
+                cmd = sql.Composed(
+                    [
+                        sql.SQL("SELECT * FROM {} WHERE ").format(sql.SQL(parent_name)),
+                        where,
+                    ]
+                )
             else:
-                cmd = sql.SQL("SELECT * FROM {}").format(
-                    sql.SQL(parent_name))
+                cmd = sql.SQL("SELECT * FROM {}").format(sql.SQL(parent_name))
 
             parent_data = self.select(cmd)
 
             if not parent_data.empty:
-                df.set_index(
-                    foreign_key["child_column"].to_list(), inplace=True)
+                df.set_index(foreign_key["child_column"].to_list(), inplace=True)
                 parent_data.set_index(
-                    foreign_key["parent_column"].to_list(), inplace=True)
+                    foreign_key["parent_column"].to_list(), inplace=True
+                )
                 # remove rows which are not in parent index
                 df = df[df.index.isin(parent_data.index)]
                 # reset index and sort columns
-                df = df.reset_index(
-                    level=foreign_key["child_column"].to_list())
+                df = df.reset_index(level=foreign_key["child_column"].to_list())
                 df = df[data.columns]
             else:
                 df = pd.DataFrame()
         return df
 
     def encode_category(
-            self,
-            data: pd.DataFrame,
-            category: str,
-            key: str,
-            category_table: str,
-            category_name: Optional[str] = None,
-            key_name: Optional[str] = None,
-            na_value: Optional[str] = None
+        self,
+        data: pd.DataFrame,
+        category: str,
+        key: str,
+        category_table: str,
+        category_name: Optional[str] = None,
+        key_name: Optional[str] = None,
+        na_value: Optional[str] = None,
     ) -> pd.DataFrame:
         """Encode categorical column.
 
@@ -583,19 +588,23 @@ class Commuter(BaseCommuter):
 
         table_data = self.select(
             sql.SQL("SELECT DISTINCT {} FROM {}").format(
-                sql.SQL(category_name), sql.SQL(category_table)))
+                sql.SQL(category_name), sql.SQL(category_table)
+            )
+        )
 
         if not table_data.empty:
-            cat = cat[~cat[category_name].isin(
-                table_data[category_name].tolist())]
+            cat = cat[~cat[category_name].isin(table_data[category_name].tolist())]
 
         if len(cat) > 0:
             self.copy_from(category_table, cat, format_data=True)
 
         cmd = sql.SQL("SELECT {} AS {}, {} AS {} FROM {}").format(
-            sql.Identifier(key_name), sql.Identifier(key),
-            sql.Identifier(category_name), sql.Identifier(category),
-            sql.SQL(category_table))
+            sql.Identifier(key_name),
+            sql.Identifier(key),
+            sql.Identifier(category_name),
+            sql.Identifier(category),
+            sql.SQL(category_table),
+        )
 
         df = self.select(cmd)
         data[key] = data[category].map(df.set_index(category)[key].to_dict())
@@ -617,13 +626,9 @@ class Commuter(BaseCommuter):
         return self.select(queries.column_names(_table_name, _schema))
 
     def _format_data(
-            self,
-            data: pd.DataFrame,
-            table_name: str,
-            sep: str = ","
+        self, data: pd.DataFrame, table_name: str, sep: str = ","
     ) -> pd.DataFrame:
-        """Formatting DataFrame before applying COPY FROM.
-        """
+        """Formatting DataFrame before applying COPY FROM."""
 
         table_columns = self._table_columns(table_name)
         columns = []  # type: List[str]

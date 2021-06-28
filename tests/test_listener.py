@@ -14,19 +14,18 @@ def create_table(table_name):
 @with_table("model.test", create_table)
 def test_poll():
     listener.create_notify_function(
-        func_name="model.notify_trigger",
-        channel="test_channel")
+        func_name="model.notify_trigger", channel="test_channel"
+    )
 
-    listener.create_trigger(
-        table_name="model.people",
-        func_name="notify_trigger")
+    listener.create_trigger(table_name="model.people", func_name="notify_trigger")
 
     listener.poll(
         channel="test_channel",
         on_notify=on_notify,
         on_timeout=on_timeout,
         on_close=on_close,
-        timeout=1)
+        timeout=1,
+    )
 
     df = commuter.select("SELECT * FROM model.test")
 
@@ -40,23 +39,14 @@ def on_notify(payload):
     else:
         _id, _name = 2, "Yeltsin"
 
-    commuter.insert_row(
-        table_name="model.test",
-        id=_id,
-        name=_name)
+    commuter.insert_row(table_name="model.test", id=_id, name=_name)
 
     raise KeyboardInterrupt
 
 
 def on_timeout():
-    commuter.insert_row(
-        table_name="model.people",
-        id=1,
-        name="Yeltsin")
+    commuter.insert_row(table_name="model.people", id=1, name="Yeltsin")
 
 
 def on_close():
-    commuter.insert_row(
-        table_name="model.test",
-        id=3,
-        name="Yeltsin")
+    commuter.insert_row(table_name="model.test", id=3, name="Yeltsin")

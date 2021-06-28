@@ -17,4 +17,3 @@ script:
 
 after_script:
   - make -C docker/ clean
-  - make -C docker/ prune

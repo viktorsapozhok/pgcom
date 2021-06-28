@@ -50,12 +50,15 @@ def create_category_table(table_name):
 
 
 def create_test_data():
-    return pd.DataFrame({
-        "var_1": pd.date_range(datetime.now(), periods=3),
-        "var_2": [1, 2, 3],
-        "var_3": ["x", "xx", "xxx"],
-        "var_4": [1.1, 2.2, 3.3],
-        "var_5": [1, 2, 3]})
+    return pd.DataFrame(
+        {
+            "var_1": pd.date_range(datetime.now(), periods=3),
+            "var_2": [1, 2, 3],
+            "var_3": ["x", "xx", "xxx"],
+            "var_4": [1.1, 2.2, 3.3],
+            "var_5": [1, 2, 3],
+        }
+    )
 
 
 def test_repr():
@@ -160,8 +163,8 @@ def test_copy_from_schema():
     assert len(data) == 3
 
     commuter.copy_from(
-        "model.test_table", df,
-        format_data=True, where="var_2 in (1,2,3)")
+        "model.test_table", df, format_data=True, where="var_2 in (1,2,3)"
+    )
     assert data["date"][0].date() == datetime.now().date()
     assert len(data) == 3
 
@@ -202,9 +205,7 @@ def test_execute_with_params():
     age = 72
     cmd = "CREATE TABLE IF NOT EXISTS people(name text, age integer)"
     commuter.execute(cmd=cmd)
-    commuter.execute(
-        cmd="INSERT INTO people VALUES (%s, %s)",
-        values=(who, age))
+    commuter.execute(cmd="INSERT INTO people VALUES (%s, %s)", values=(who, age))
     df = commuter.select("SELECT * FROM people")
     assert df["age"][0] == 72
     assert len(df) == 1
@@ -216,20 +217,21 @@ def test_resolve_primary_conflicts():
     data = create_test_data()
     commuter.copy_from("model.test_table", data)
     df = commuter.resolve_primary_conflicts(
-        "model.test_table", data, where="var_2 in (1,2,3)")
+        "model.test_table", data, where="var_2 in (1,2,3)"
+    )
     assert df.empty
 
     df = commuter.resolve_primary_conflicts(
-        "model.test_table", data,
-        where=f"var_1 > '{datetime(2020,1,1)}'")
+        "model.test_table", data, where=f"var_1 > '{datetime(2020,1,1)}'"
+    )
     assert df.empty
 
     _data = data.copy()
     _data["var_2"] = [-1, 2, -3]
 
     df = commuter.resolve_primary_conflicts(
-        "model.test_table", _data,
-        where=f"var_1 > '{datetime(2020,1,1)}'")
+        "model.test_table", _data, where=f"var_1 > '{datetime(2020,1,1)}'"
+    )
     assert len(df) == 2
 
 
@@ -237,8 +239,9 @@ def test_resolve_primary_conflicts():
 @with_table("child_table", create_child_table, "model.test_table")
 def test_resolve_foreign_conflicts():
     parent_data = create_test_data()
-    child_data = pd.DataFrame({
-        "var_1": [1, 1, 3, 4, 5], "var_2": [1] * 5, "var_3": ["x"] * 5})
+    child_data = pd.DataFrame(
+        {"var_1": [1, 1, 3, 4, 5], "var_2": [1] * 5, "var_3": ["x"] * 5}
+    )
 
     commuter.copy_from("model.test_table", parent_data)
 
@@ -246,7 +249,8 @@ def test_resolve_foreign_conflicts():
         table_name="child_table",
         parent_name="model.test_table",
         data=child_data,
-        where="var_2=1")
+        where="var_2=1",
+    )
     assert len(df) == 2
 
 
@@ -256,7 +260,8 @@ def test_insert_row():
         table_name="model.test_table",
         var_1=datetime(2019, 12, 9),
         var_2=7,
-        var_3="test")
+        var_3="test",
+    )
     df = commuter.select("SELECT * FROM model.test_table")
     assert len(df) == 1
     assert df["var_1"][0] == datetime(2019, 12, 9)
@@ -269,7 +274,8 @@ def test_insert_numpy_types():
         var_1=datetime(2019, 12, 9),
         var_2=np.int64(7),
         var_3="test",
-        var_4=np.float64(7.1))
+        var_4=np.float64(7.1),
+    )
     df = commuter.select("SELECT * FROM test_table")
     assert df["var_2"][0] == 7
     assert df["var_4"][0] == 7.1
@@ -289,7 +295,8 @@ def test_insert_row_return():
         return_id="id",
         var_1=datetime(2019, 12, 9),
         var_2=7,
-        var_3="test")
+        var_3="test",
+    )
     assert row_id == 1
 
     df = commuter.select("SELECT * FROM model.test_table")
@@ -302,16 +309,16 @@ def test_insert_row_return():
     """
 
     row_id = commuter.insert_return(
-        cmd=cmd,
-        values=(datetime(2019, 12, 9), 8, "test"),
-        return_id="id")
+        cmd=cmd, values=(datetime(2019, 12, 9), 8, "test"), return_id="id"
+    )
     assert row_id == 2
 
     with pytest.raises(exc.QueryExecutionError) as e:
         _ = commuter.insert_return(
             cmd="INSERT INTO model.test_table VALUES (%s,%s)",
             values=(1, 1),
-            return_id="id")
+            return_id="id",
+        )
     assert e.type == exc.QueryExecutionError
 
     sid = commuter.insert_return("DROP TABLE model.test_table")
@@ -347,7 +354,8 @@ def test_encode_category():
         category="var_3",
         key="category_id",
         category_table="model.category_table",
-        category_name="category")
+        category_name="category",
+    )
     assert data["category_id"].to_list() == [1, 2, 1]
 
     data = commuter.select("SELECT * FROM model.category_table")
@@ -360,7 +368,8 @@ def test_encode_category():
         category="var_3",
         key="category_id",
         category_table="model.category_table",
-        category_name="category")
+        category_name="category",
+    )
 
     assert data["category_id"].to_list() == [2, 3, 1]
 
@@ -376,7 +385,8 @@ def test_encode_missing():
         key="category_id",
         category_table="model.category_table",
         category_name="category",
-        na_value="None")
+        na_value="None",
+    )
     assert data["category_id"].to_list() == [1, 2, 1]
 
 
@@ -385,8 +395,8 @@ def test_custom_placeholders():
     data = create_test_data()
     placeholders = ["%s" for col in data.columns if col in ["var_2", "var_3"]]
     commuter.insert(
-        "model.test_table", data,
-        columns=["var_2", "var_3"], placeholders=placeholders)
+        "model.test_table", data, columns=["var_2", "var_3"], placeholders=placeholders
+    )
     df = commuter.select("select * from model.test_table")
     assert df["var_2"].to_list() == [1, 2, 3]
 
@@ -400,8 +410,9 @@ def test_copy_with_custom_sep():
     assert df["var_3"].to_list() == ["x", "xx", "x,x,x"]
 
     data["var_3"] = ["x", "xx", "x;x,x"]
-    commuter.copy_from("model.test_table", data,
-                       format_data=True, sep="|", where="var_2 > 0")
+    commuter.copy_from(
+        "model.test_table", data, format_data=True, sep="|", where="var_2 > 0"
+    )
     df = commuter.select("select * from model.test_table")
     assert df["var_3"].to_list() == ["x", "xx", "x;x,x"]
 
