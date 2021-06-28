@@ -1,7 +1,7 @@
 ChangeLog
 =========
 
-0.2.6 (2021-06-28)
+0.2.7 (2021-06-28)
 ------------------
 
 * Fixed :func:`~pgcom.commuter.Commuter.copy_from` to make it compatible with `psycopg2 2.9` release.
