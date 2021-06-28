@@ -4,16 +4,16 @@ branches:
 
 language: python
 python:
-  - 3.7
+  - 3.9
 
 services:
   - docker
 
 install:
-  - make -C docker/ build
+  - make build
 
 script:
-  - make -C docker/ test
+  - make test
 
 after_script:
-  - make -C docker/ clean
+  - make clean
