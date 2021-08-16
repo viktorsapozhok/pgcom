@@ -147,6 +147,42 @@ a separate table called ``cities``. And replace column with the corresponding ``
     1        2  London
     2        3   Paris
 
+When categories are presented by multiple columns, its suggested to use ``encode_composite_category``
+method. It implements writing of all the unique combinations given by multiple columns in
+DataFrame to the table given by ``category_table``.
+
+.. code-block:: python
+
+    >>> df
+         city  year country
+    0  Berlin  2010 Germany
+    1  Berlin  2011 None
+    2  London  2015 UK
+    3   Paris  2012 France
+    4  Berlin  2018 UK
+
+    >>> cmd = "CREATE TABLE cities (city_id SERIAL PRIMARY KEY, city TEXT, country TEXT)"
+    >>> commuter.execute(cmd)
+
+    >>> cats = {"city: city", "country": "country"}
+    >>> df = commuter.encode_composite_category(
+    ...     data=df, categories=cats, key="city_id",
+    ...     category_table="cities", na_value="NONE")
+    >>> df
+         city  year  country  city_id
+    0  Berlin  2010  Germany        1
+    1  Berlin  2018  Germany        1
+    2  Berlin  2011     NONE        2
+    3  London  2015       UK        3
+    4   Paris  2012   France        4
+
+    >>> commuter.select("SELECT * FROM cities")
+       city_id    city  country
+    0        1  Berlin  Germany
+    1        2  Berlin     NONE
+    2        3  London       UK
+    3        4   Paris   France
+
 Connection options
 ------------------
 
@@ -292,3 +328,6 @@ See `API reference <https://pgcom.readthedocs.io/en/latest/reference/listener.ht
 
     Note that the payload is only available from PostgreSQL 9.0: notifications received
     from a previous version server will have the payload attribute set to the empty string.
+
+
+df = commuter.encode_composite_category(data=df, categories={"city: city", "country": "country"}, key="city_id", category_table="cities")

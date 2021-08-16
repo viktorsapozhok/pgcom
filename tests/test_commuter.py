@@ -49,6 +49,26 @@ def create_category_table(table_name):
     """
 
 
+def create_test_table_with_categories(table_name):
+    return f"""
+    CREATE TABLE IF NOT EXISTS {table_name} (
+        var_1 integer NOT NULL PRIMARY KEY,
+        var_2 text,
+        var_3 text,
+        var_4 text);
+    """
+
+
+def create_composite_category_table(table_name):
+    return f"""
+    CREATE TABLE IF NOT EXISTS {table_name} (
+        category_id SERIAL PRIMARY KEY,
+        category_1 TEXT,
+        category_2 TEXT,
+        category_3 TEXT);
+    """
+
+
 def create_test_data():
     return pd.DataFrame(
         {
@@ -388,6 +408,58 @@ def test_encode_missing():
         na_value="None",
     )
     assert data["category_id"].to_list() == [1, 2, 1]
+
+
+@with_table("model.test_table", create_test_table_with_categories)
+@with_table("model.category_table", create_composite_category_table)
+def test_encode_composite_category():
+    data = pd.DataFrame(
+        {
+            "var_1": [1, 2, 3, 4],
+            "var_2": ["a", "aa", "aa", "aa"],
+            "var_3": ["b", "bb", "bb", "bb"],
+            "var_4": ["c", "cc", "cc", None],
+        }
+    )
+    commuter.insert("model.test_table", data=data)
+    data = commuter.encode_composite_category(
+        data=data,
+        categories={
+            "var_2": "category_1",
+            "var_3": "category_2",
+            "var_4": "category_3",
+        },
+        key="category_id",
+        category_table="model.category_table",
+        na_value="NONE",
+    )
+    assert data["category_id"].to_list() == [1, 2, 2, 3]
+
+    data = commuter.select("SELECT * FROM model.category_table")
+    assert len(data) == 3
+
+    data = pd.DataFrame(
+        {
+            "var_1": [5, 6, 7],
+            "var_2": ["a", "aa", "aaa"],
+            "var_3": ["b", "bb", "bbb"],
+            "var_4": ["c", None, "ccc"],
+        }
+    )
+    commuter.insert("model.test_table", data=data)
+    data = commuter.encode_composite_category(
+        data=data,
+        categories={
+            "var_2": "category_1",
+            "var_3": "category_2",
+            "var_4": "category_3",
+        },
+        key="category_id",
+        category_table="model.category_table",
+        na_value="NONE",
+    )
+
+    assert data["category_id"].to_list() == [1, 3, 4]
 
 
 @with_table("model.test_table", create_test_table)

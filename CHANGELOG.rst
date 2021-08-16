@@ -1,6 +1,11 @@
 ChangeLog
 =========
 
+0.2.8 (2021-08-16)
+------------------
+
+* Added :func:`~pgcom.commuter.Commuter.encode_composite_category` method.
+
 0.2.7 (2021-06-28)
 ------------------
 

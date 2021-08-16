@@ -1,7 +1,7 @@
 __all__ = ["Commuter"]
 
 from io import StringIO
-from typing import Any, List, Mapping, Optional, Sequence, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -609,6 +609,79 @@ class Commuter(BaseCommuter):
         df = self.select(cmd)
         data[key] = data[category].map(df.set_index(category)[key].to_dict())
         return data
+
+    def encode_composite_category(
+        self,
+        data: pd.DataFrame,
+        categories: Dict[str, str],
+        key: str,
+        category_table: str,
+        key_name: Optional[str] = None,
+        na_value: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """Encode categories represented by multiple columns.
+
+        Implements writing of all the unique combinations given by multiple
+        columns in DataFrame to the table given by ``category_table``.
+
+        Dictionary ``categories`` provides a mapping between DataFrame and
+        ``category_table`` column names.
+
+        Args:
+            data:
+                Pandas.DataFrame with categorical columns.
+            categories:
+                Dictionary provided the mapping between column names. Dict keys
+                provide names of columns in ``data`` represented category,
+                values represent column names in ``category_table``.
+            key:
+                Name of the DataFrame column with encoded values.
+            category_table:
+                Name of the table with stored categories.
+            key_name:
+                Name of the column in ``category_table`` contained
+                the encoded values. Defaults to ``key``.
+            na_value:
+                Missing data representation.
+
+        Returns:
+            Pandas.DataFrame with encoded category.
+        """
+
+        if key_name is None:
+            key_name = key
+
+        for category in categories.keys():
+            if na_value is not None:
+                data[category] = data[category].fillna(na_value)
+            data[category] = data[category].str.replace(",", "")
+
+        cat = data[list(categories.keys())].drop_duplicates()
+        cat.rename(columns=categories, inplace=True)
+
+        table_data = self.select(
+            sql.SQL("SELECT * FROM {}").format(sql.SQL(category_table))
+        )
+
+        composite_key = list(categories.values())
+
+        if not table_data.empty:
+            cat.set_index(composite_key, inplace=True)
+            table_data.set_index(composite_key, inplace=True)
+            cat = cat[~cat.index.isin(table_data.index)]
+            cat.reset_index(level=composite_key, inplace=True)
+
+        if len(cat) > 0:
+            self.copy_from(category_table, cat, format_data=True)
+
+        df = self.select(sql.SQL("SELECT * FROM {}").format(sql.SQL(category_table)))
+
+        df.rename(columns={v: k for k, v in categories.items()}, inplace=True)
+        df.rename(columns={key_name: key}, inplace=True)
+        columns = list(data.columns) + [key]
+        data = data.merge(df, how="inner", on=list(categories.keys()))
+
+        return data[columns]
 
     def _table_columns(self, table_name: str) -> pd.DataFrame:
         """Return columns attributes of the given table.
