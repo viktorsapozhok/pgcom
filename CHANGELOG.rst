@@ -1,6 +1,11 @@
 ChangeLog
 =========
 
+0.2.9 (2022-04-04)
+------------------
+
+- Fixed :func:`~pgcom.commuter.Commuter.encode_composite_category` for integer categories.
+
 0.2.8 (2021-08-16)
 ------------------
 

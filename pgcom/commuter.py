@@ -654,9 +654,13 @@ class Commuter(BaseCommuter):
         for category in categories.keys():
             if na_value is not None:
                 data[category] = data[category].fillna(na_value)
-            data[category] = data[category].str.replace(",", "")
 
-        cat = data[list(categories.keys())].drop_duplicates()
+            if data[category].dtype == object and isinstance(
+                data[category].iloc[0], str
+            ):
+                data[category] = data[category].str.replace(",", "")
+
+        cat = data.drop_duplicates(subset=list(categories.keys()))
         cat.rename(columns=categories, inplace=True)
 
         table_data = self.select(
@@ -678,10 +682,10 @@ class Commuter(BaseCommuter):
 
         df.rename(columns={v: k for k, v in categories.items()}, inplace=True)
         df.rename(columns={key_name: key}, inplace=True)
-        columns = list(data.columns) + [key]
-        data = data.merge(df, how="inner", on=list(categories.keys()))
+        columns = list(categories.keys()) + [key]
+        data = data.merge(df[columns], how="inner", on=list(categories.keys()))
 
-        return data[columns]
+        return data
 
     def _table_columns(self, table_name: str) -> pd.DataFrame:
         """Return columns attributes of the given table.
